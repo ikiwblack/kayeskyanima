@@ -4,8 +4,7 @@ from io import BytesIO
 from PIL import Image
 import wave
 import numpy as np
-import tempfile
-import os
+from lxml import etree
 
 from scripts.svg_emotion import apply_emotion
 
@@ -35,9 +34,12 @@ def load_audio_envelope(wav_path, fps):
     return envelope
 
 
-def svg_to_image(svg_path):
+# =====================
+# SVG → PIL IMAGE
+# =====================
+def svg_tree_to_image(tree):
     png = cairosvg.svg2png(
-        url=svg_path,
+        bytestring=etree.tostring(tree),
         output_width=W,
         output_height=H
     )
@@ -50,6 +52,9 @@ def svg_to_image(svg_path):
 def render_all(timeline, output_video):
     fps = timeline["fps"]
     envelope = load_audio_envelope("output/audio.wav", fps)
+
+    # preload base SVG sekali
+    base_tree = etree.parse("assets/character_base.svg")
 
     ffmpeg = subprocess.Popen([
         "ffmpeg", "-y",
@@ -65,41 +70,37 @@ def render_all(timeline, output_video):
 
     frame_idx = 0
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        for scene in timeline["scenes"]:
-            bg = svg_to_image(
-                f"assets/backgrounds/{scene.get('bg','neutral')}.svg"
-            )
-            frames = int(scene["duration"] * fps)
+    for scene in timeline["scenes"]:
+        bg_tree = etree.parse(
+            f"assets/backgrounds/{scene.get('bg','neutral')}.svg"
+        )
+        bg_img = svg_tree_to_image(bg_tree)
 
-            for i in range(frames):
-                frame = bg.copy()
+        frames = int(scene["duration"] * fps)
 
-                for char in timeline["characters"]:
-                    mouth = (
-                        envelope[min(frame_idx, len(envelope)-1)]
-                        if char["id"] == scene["speaker"]
-                        else 0.0
-                    )
+        for _ in range(frames):
+            frame = bg_img.copy()
 
-                    tmp_svg = os.path.join(
-                        tmpdir, f"{char['id']}.svg"
-                    )
+            for char in timeline["characters"]:
+                mouth = (
+                    envelope[min(frame_idx, len(envelope) - 1)]
+                    if char["id"] == scene["speaker"]
+                    else 0.0
+                )
 
-                    apply_emotion(
-                        "assets/character_base.svg",
-                        tmp_svg,
-                        scene["emotion"],
-                        mouth
-                    )
+                char_tree = apply_emotion(
+                    base_tree=base_tree,
+                    emotion=scene["emotion"],
+                    mouth_open=mouth,
+                    frame=frame_idx,
+                    fps=fps
+                )
 
-                    char_img = svg_to_image(tmp_svg)
-                    frame.alpha_composite(
-                        char_img, (char["x"], 900)
-                    )
+                char_img = svg_tree_to_image(char_tree)
+                frame.alpha_composite(char_img, (char["x"], 900))
 
-                ffmpeg.stdin.write(frame.tobytes())
-                frame_idx += 1
+            ffmpeg.stdin.write(frame.tobytes())
+            frame_idx += 1
 
     ffmpeg.stdin.close()
     ffmpeg.wait()
