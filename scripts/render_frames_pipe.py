@@ -8,8 +8,6 @@ from lxml import etree
 
 from scripts.svg_emotion import apply_emotion
 
-W, H = 1080, 1920
-
 # =====================
 # AUDIO ENVELOPE
 # =====================
@@ -37,11 +35,11 @@ def load_audio_envelope(wav_path, fps):
 # =====================
 # SVG → PIL IMAGE
 # =====================
-def svg_tree_to_image(tree):
+def svg_tree_to_image(tree, width, height):
     png = cairosvg.svg2png(
         bytestring=etree.tostring(tree),
-        output_width=W,
-        output_height=H
+        output_width=width,
+        output_height=height
     )
     return Image.open(BytesIO(png)).convert("RGBA")
 
@@ -50,17 +48,27 @@ def svg_tree_to_image(tree):
 # RENDER CORE
 # =====================
 def render_all(timeline, characters_map, output_video):
+    W = timeline.get("width", 1080)
+    H = timeline.get("height", 1920)
     fps = timeline["fps"]
+
+    # Determine adaptive scale factor based on number of characters
+    num_chars = len(timeline.get("characters", []))
+    if num_chars == 2:
+        scale_factor = 0.55  # Slightly smaller for 2 characters
+    elif num_chars >= 3:
+        scale_factor = 0.5   # Even smaller for 3+ characters
+    else:
+        scale_factor = 0.6   # Default size for 1 character
+
     envelope = load_audio_envelope("output/audio.wav", fps)
 
-    # Preload all character SVGs based on the map
     character_svgs = {}
     for char_id, char_info in characters_map.items():
         char_type = char_info["type"]
         svg_path = f"assets/characters/{char_type}.svg"
         if char_type not in character_svgs:
             character_svgs[char_type] = etree.parse(svg_path)
-
 
     ffmpeg = subprocess.Popen([
         "ffmpeg", "-y",
@@ -77,10 +85,10 @@ def render_all(timeline, characters_map, output_video):
     frame_idx = 0
 
     for scene in timeline["scenes"]:
-        bg_tree = etree.parse(
-            f"assets/backgrounds/{scene.get('bg','neutral')}.svg"
-        )
-        bg_img = svg_tree_to_image(bg_tree)
+        bg_tree = etree.parse(f"assets/backgrounds/{scene.get('bg', 'neutral')}.svg")
+        bg_tree.getroot().set("width", str(W))
+        bg_tree.getroot().set("height", str(H))
+        bg_img = svg_tree_to_image(bg_tree, W, H)
 
         frames = int(scene["duration"] * fps)
 
@@ -106,9 +114,22 @@ def render_all(timeline, characters_map, output_video):
                     fps=fps,
                     gesture=scene.get("gesture")
                 )
+                
+                # Scale character based on video height and number of characters
+                char_height = int(H * scale_factor)
+                char_width = int(char_height * (512/512)) # Preserve aspect ratio
+                
+                char_img_resized = cairosvg.svg2png(
+                    bytestring=etree.tostring(char_tree),
+                    output_width=char_width,
+                    output_height=char_height
+                )
+                char_img = Image.open(BytesIO(char_img_resized)).convert("RGBA")
 
-                char_img = svg_tree_to_image(char_tree)
-                frame.alpha_composite(char_img, (char_in_scene["x"], 900))
+                y_pos = H - char_height + int(H * 0.05)
+                x_pos = char_in_scene["x"]
+
+                frame.alpha_composite(char_img, (x_pos, y_pos))
 
             ffmpeg.stdin.write(frame.tobytes())
             frame_idx += 1

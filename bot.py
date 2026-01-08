@@ -16,16 +16,12 @@ from telegram.ext import (
     filters
 )
 
+# Import the analyze function directly
+from scripts.analyze_text import analyze
+
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 
 # ===== STATE =====
-# USER_STATE akan menyimpan semua status dan data per pengguna
-# step: langkah saat ini dalam wizard (char_count, select_char, edit)
-# script: naskah asli dari pengguna
-# char_count: jumlah karakter yang dipilih
-# chars: daftar tipe karakter yang dipilih (misalnya, ["Kakek", "Pria"])
-# timeline: struktur data timeline setelah analisis
-# scene_idx: indeks scene yang sedang diedit
 USER_STATE = {}
 
 # ===== CHARACTERS & VOICE MAPPING =====
@@ -54,7 +50,6 @@ async def send_timeline_preview(chat_id, context):
         text += f"{i+1}. ({char_type}) [{s['emotion']}] {s['text']} ({s['duration']}s)\n"
 
     keyboard = []
-    # Logic for edit scene buttons
     scene_buttons = [InlineKeyboardButton(f"✏️ Scene {i+1}", callback_data=f"scene:{i+1}") for i in range(len(timeline["scenes"]))]
     for i in range(0, len(scene_buttons), 2):
         keyboard.append(scene_buttons[i:i+2])
@@ -117,7 +112,6 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     step = state.get("step")
 
-    # ===== WIZARD STEP 1: CHARACTER COUNT =====
     if data.startswith("count_char:"):
         if step != "char_count": return
         
@@ -126,7 +120,6 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state["step"] = "select_char"
         await ask_for_character_type(chat_id, query.message, char_index=0, is_edit=True)
 
-    # ===== WIZARD STEP 2: SELECT CHARACTER TYPE =====
     elif data.startswith("select_char:"):
         if step != "select_char": return
 
@@ -137,36 +130,48 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if next_char_index < state["char_count"]:
             await ask_for_character_type(chat_id, query.message, char_index=next_char_index, is_edit=True)
         else:
-            # All characters selected, proceed to analysis
-            await query.edit_message_text("✅ Karakter telah diatur. Menganalisis naskah...")
-            
-            # Build and save characters.json
+            state["step"] = "select_orientation"
+            keyboard = [[
+                InlineKeyboardButton("Portrait (9:16)", callback_data="orientation:9:16"),
+                InlineKeyboardButton("Landscape (16:9)", callback_data="orientation:16:9"),
+            ]]
+            await query.edit_message_text(
+                "Pilih orientasi video:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+    elif data.startswith("orientation:"):
+        if step != "select_orientation": return
+
+        orientation = data.split(":")[1]
+        state["orientation"] = orientation
+        await query.edit_message_text("✅ Pengaturan selesai. Menganalisis naskah...")
+
+        try:
+            timeline = analyze(state["script"], state["orientation"])
+            state["timeline"] = timeline
+
             char_map = {}
             for i, c_type in enumerate(state["chars"]):
                 char_id = chr(ord('a') + i)
-                char_map[char_id] = {
-                    "type": c_type,
-                    "voice": VOICE_MAP.get(c_type, "id-ID-Standard-A") # Default voice
-                }
+                char_map[char_id] = {"type": c_type, "voice": VOICE_MAP.get(c_type)}
+            
+            # Inject character types into the timeline
+            for char_data in timeline.get("characters", []):
+                char_id = char_data.get("id")
+                if char_id in char_map:
+                    char_data["type"] = char_map[char_id]["type"]
+
             with open("characters.json", "w", encoding="utf-8") as f:
                 json.dump(char_map, f, indent=2)
 
-            # Save script
-            with open("script.txt", "w", encoding="utf-8") as f:
-                f.write(state["script"])
-            
-            # Run analysis
-            try:
-                subprocess.run(["python", "main.py", "analyze"], check=True, capture_output=True, text=True)
-            except subprocess.CalledProcessError as e:
-                await context.bot.send_message(chat_id, "❌ Analisis gagal:\n" + e.stderr)
-                return
-
-            state["timeline"] = json.load(open("timeline.json", encoding="utf-8"))
             state["step"] = "edit"
+            await query.delete_message()
             await send_timeline_preview(chat_id, context)
 
-    # ===== EDITING AND RENDERING STEPS =====
+        except Exception as e:
+            await context.bot.send_message(chat_id, f"❌ Analisis gagal: {e}")
+
     elif step == "edit":
         if data.startswith("scene:"):
             state["scene_idx"] = int(data.split(":")[1]) - 1
@@ -209,13 +214,21 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("❌ Dibatalkan.")
 
         elif data == "render":
-            json.dump(state["timeline"], open("timeline.json", "w", encoding="utf-8"), indent=2, ensure_ascii=False)
             await query.edit_message_text("🎬 Rendering dimulai...")
-            subprocess.run(["python", "main.py", "render"], check=True)
-            await context.bot.send_video(chat_id=chat_id, video=open("output/video.mp4", "rb"), caption="✅ Video selesai")
-            USER_STATE.pop(chat_id, None)
+            # Save final timeline and script for the rendering process
+            with open("timeline.json", "w", encoding="utf-8") as f:
+                json.dump(state["timeline"], f, indent=2, ensure_ascii=False)
+            with open("script.txt", "w", encoding="utf-8") as f:
+                f.write(state["script"])
 
-# ===== START BOT =====
+            try:
+                subprocess.run(["python", "main.py", "render"], check=True, capture_output=True, text=True)
+                await context.bot.send_video(chat_id=chat_id, video=open("output/video.mp4", "rb"), caption="✅ Video selesai")
+                USER_STATE.pop(chat_id, None)
+            except subprocess.CalledProcessError as e:
+                await context.bot.send_message(chat_id, f"❌ Render gagal:\n{e.stderr}")
+
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_script))

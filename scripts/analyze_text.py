@@ -11,18 +11,30 @@ PROMPT = """
 Ubah naskah menjadi timeline animasi.
 
 ATURAN:
-- Output HARUS JSON valid
-- Maksimal 10 scene
-- Emotion hanya: neutral, sad, happy, thinking, angry, surprised
-- Gesture (opsional) hanya: raise_hand, walk
-- Durasi 3–6 detik
+- Output HARUS JSON valid.
+- Dimensi video adalah <<<WIDTH>>>x<<<HEIGHT>>>. Sesuaikan posisi horizontal karakter (`x`) agar sesuai dengan lebar ini.
+- Maksimal 10 scene.
+- Emotion hanya: neutral, sad, happy, thinking, angry, surprised.
+- Gesture (opsional) hanya: raise_hand, walk.
+- Durasi 3–6 detik.
+- Untuk setiap karakter, pilih warna dari daftar di bawah ini.
+
+WARNA:
+- &H00FFFF& (Cyan)
+- &HFF00FF& (Magenta)
+- &HFFFF00& (Yellow)
+- &H00FF00& (Green)
+- &HFF0000& (Red)
+- &H0000FF& (Blue)
 
 WAJIB FORMAT:
 {
+  "width": <<<WIDTH>>>,
+  "height": <<<HEIGHT>>>,
   "fps": 12,
   "characters": [
-    { "id": "a", "x": 250, "color": "&H00FFCC&" },
-    { "id": "b", "x": 650, "color": "&HFF99FF&" }
+    { "id": "a", "x": 400, "color": "&H00FFFF&" },
+    { "id": "b", "x": 1400, "color": "&HFF00FF&" }
   ],
   "scenes": [
     {
@@ -41,7 +53,6 @@ NASKAH:
 """
 
 def extract_json(text: str) -> dict:
-    # Gemini may return JSON inside ```json ... ``` markdown.
     text = text.strip()
     if text.startswith("```json"):
         text = text[7:]
@@ -53,22 +64,39 @@ def extract_json(text: str) -> dict:
         raise ValueError("Gemini tidak mengembalikan JSON yang valid")
     return json.loads(match.group())
 
-def analyze(text: str) -> dict:
-    """Analyzes the script text and returns a timeline dictionary."""
-    cached = load_cached_timeline(text)
+def analyze(text: str, orientation: str = "9:16") -> dict:
+    """Menganalisis naskah dan mengembalikan timeline dictionary berdasarkan orientasi."""
+    cache_key = f"orientation={orientation}::{text}"
+    cached = load_cached_timeline(cache_key)
     if cached:
         return cached
 
-    prompt_with_text = PROMPT.replace("<<<TEXT>>>", text)
+    if orientation == "16:9":
+        width, height = 1920, 1080
+    else:  # Default ke 9:16
+        width, height = 1080, 1920
 
-    # Call the Gemini API
-    response = model.generate_content(prompt_with_text)
+    prompt = PROMPT.replace("<<<TEXT>>>", text)
+    prompt = prompt.replace("<<<WIDTH>>>", str(width))
+    prompt = prompt.replace("<<<HEIGHT>>>", str(height))
+
+    response = model.generate_content(prompt)
 
     try:
         raw_text = response.text
         timeline = extract_json(raw_text)
 
-        save_cached_timeline(text, timeline)
+        if "characters" in timeline:
+            colors = ["&H00FFFF&", "&HFF00FF&", "&HFFFF00&", "&H00FF00&", "&HFF0000&", "&H0000FF&"]
+            for i, char in enumerate(timeline["characters"]):
+                if "color" not in char or not char["color"]:
+                    char["color"] = colors[i % len(colors)]
+        
+        # Fallback untuk memastikan dimensi ada di output
+        timeline.setdefault("width", width)
+        timeline.setdefault("height", height)
+
+        save_cached_timeline(cache_key, timeline)
         return timeline
     except (ValueError, AttributeError) as e:
         raise ValueError(f"Gagal memproses response dari Gemini: {e}") from e
