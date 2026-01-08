@@ -12,11 +12,12 @@ def load_cached_timeline(text: str):
     h = script_hash(text)
     path = os.path.join(CACHE_DIR, f"{h}.json")
     if os.path.exists(path):
-        return json.load(open(path, encoding="utf-8"))
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
     return None
 
 def save_cached_timeline(text: str, timeline: dict):
     h = script_hash(text)
     path = os.path.join(CACHE_DIR, f"{h}.json")
-    json.dump(timeline, open(path, "w", encoding="utf-8"),
-              indent=2, ensure_ascii=False)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(timeline, f, indent=2, ensure_ascii=False)
