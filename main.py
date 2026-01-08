@@ -7,7 +7,7 @@ from scripts.analyze_text import analyze
 from scripts.validate_timeline import validate_timeline
 from scripts.render_frames_pipe import render_all
 from scripts.tts_dummy import generate_audio
-from scripts.subtitles import build_srt
+from scripts.subtitles_ass import build_ass
 
 # =====================
 # CONFIG
@@ -27,9 +27,13 @@ if not text:
     raise ValueError("Naskah kosong")
 
 # =====================
-# ANALYZE (GPT → TIMELINE)
+# LOAD / ANALYZE TIMELINE
 # =====================
-timeline = analyze(text)
+if os.path.exists("timeline.json"):
+    with open("timeline.json", encoding="utf-8") as f:
+        timeline = json.load(f)
+else:
+    timeline = analyze(text)
 
 errors = validate_timeline(timeline)
 if errors:
@@ -58,9 +62,9 @@ render_all(
 )
 
 # =====================
-# SUBTITLE
+# SUBTITLE (ASS)
 # =====================
-build_srt(timeline, text)
+build_ass(timeline, "output/subtitles.ass")
 
 # =====================
 # MUX AUDIO + SUBTITLE
@@ -69,11 +73,9 @@ subprocess.run([
     "ffmpeg", "-y",
     "-i", "output/video_noaudio.mp4",
     "-i", "output/audio.wav",
-    "-vf", "subtitles=output/subtitles.srt",
+    "-vf", "ass=output/subtitles.ass",
     "-c:v", "libx264",
     "-pix_fmt", "yuv420p",
     "-c:a", "aac",
     "output/video.mp4"
-], check=True)
-
-print("RENDER SELESAI")
+], che
