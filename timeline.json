@@ -1,18 +1,20 @@
 {
   "fps": 12,
   "characters": [
-    { "id": "a", "x": 250 },
-    { "id": "b", "x": 650 }
+    { "id": "a", "x": 250, "color": "&H00FFCC&" },
+    { "id": "b", "x": 650, "color": "&HFF99FF&" }
   ],
   "scenes": [
     {
       "speaker": "a",
+      "text": "Halo, ini karakter A.",
       "emotion": "happy",
       "bg": "neutral",
       "duration": 3
     },
     {
       "speaker": "b",
+      "text": "Dan saya karakter B.",
       "emotion": "thinking",
       "bg": "room",
       "duration": 3
