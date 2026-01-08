@@ -3,6 +3,20 @@ import sys
 import json
 import subprocess
 
+# --- Google Cloud Authentication ---
+# On Railway, the GOOGLE_CREDENTIALS_JSON secret is set as an environment variable.
+# The google-cloud-texttospeech library needs to find these credentials in a file.
+# This code block writes the content of the environment variable to a temporary
+# file and then sets the GOOGLE_APPLICATION_CREDENTIALS environment variable
+# to point to that file.
+if "GOOGLE_CREDENTIALS_JSON" in os.environ:
+    creds_json_str = os.environ["GOOGLE_CREDENTIALS_JSON"]
+    creds_path = "/tmp/google_creds.json"
+    with open(creds_path, "w") as f:
+        f.write(creds_json_str)
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_path
+# --- End of Authentication Block ---
+
 # Import a new module for audio processing that we will create
 from scripts.process_audio import process_audio_and_update_timeline
 from scripts.analyze_text import analyze
@@ -82,7 +96,7 @@ subprocess.run([
     "-i", "output/audio.wav", # The single audio track from process_audio
     "-vf", "ass=output/subtitles.ass",
     "-af",
-    "acompressor=threshold=-18dB:ratio=3:attack=5:release=200,"
+    "acompressor=threshold=-18dB:ratio=3:attack=5:release=200,",
     "loudnorm=I=-16:LRA=11:TP=-1.5",
     "-c:v", "libx264",
     "-pix_fmt", "yuv420p",

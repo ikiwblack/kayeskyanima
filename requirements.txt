@@ -5,3 +5,4 @@ lxml
 google-generativeai
 numpy
 google-cloud-texttospeech
+pydub
