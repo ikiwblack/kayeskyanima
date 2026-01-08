@@ -18,14 +18,20 @@ def apply_blink(root, frame, fps):
         eyes[0].attrib["r"] = "1" if blinking else "6"
 
 
-def apply_head_nod(root, t, emotion):
-    head_group = root.xpath("//*[@id='head_group']", namespaces=NS)[0]
+import math
+
+def apply_head_nod(root, frame, fps, emotion):
+    heads = root.xpath("//*[@id='head_group']", namespaces=NS)
+    if not heads:
+        return
+
+    t = frame / fps
 
     if emotion == "thinking":
-        angle = -10 + (t * 20)
+        angle = math.sin(t * 1.5) * 6
     elif emotion == "happy":
-        angle = (t * 10)
+        angle = math.sin(t * 2.5) * 4
     else:
         angle = 0
 
-    head_group.attrib["transform"] = f"rotate({angle} 256 180)"
+    heads[0].attrib["transform"] = f"rotate({angle:.2f} 256 180)"
