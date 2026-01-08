@@ -1,0 +1,7 @@
+{
+  "fps": 12,
+  "scenes": [
+    { "duration": 4, "emotion": "sad", "action": "idle" },
+    { "duration": 5, "emotion": "thinking", "action": "sit" }
+  ]
+}
