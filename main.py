@@ -12,6 +12,10 @@ with open("script.txt", encoding="utf-8") as f:
 
 timeline = analyze(text)
 
+errors = validate_timeline(timeline)
+if errors:
+    raise ValueError("Timeline tidak valid:\n" + "\n".join(errors))
+
 generate_audio(text)
 render_all(timeline)
 build_srt(timeline, text)
