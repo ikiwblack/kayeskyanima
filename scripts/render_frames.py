@@ -1,6 +1,8 @@
 from PIL import Image
 import os
 import math
+from scripts.svg_emotion import apply_emotion
+from scripts.render_svg import svg_to_png
 
 FPS = 12
 W, H = 1080, 1920
@@ -32,3 +34,13 @@ def render_all(timeline):
     frame = 0
     for scene in timeline["scenes"]:
         frame = render_scene(scene, frame)
+
+def render_scene(scene, idx):
+    svg_temp = f"output/tmp_{idx}.svg"
+    png_out = f"output/frames/frame_{idx:05d}.png"
+
+    apply_emotion(
+        "assets/character_base.svg",
+        svg_temp,
+        scene["emotion"]
+    )
