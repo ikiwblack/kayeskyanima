@@ -1,7 +1,29 @@
 {
   "fps": 12,
   "scenes": [
-    { "duration": 4, "emotion": "sad", "action": "idle" },
-    { "duration": 5, "emotion": "thinking", "action": "sit" }
+    {
+      "text": "Aku sedang berpikir tentang hidup.",
+      "emotion": "thinking",
+      "gesture": "thinking",
+      "duration": 4
+    },
+    {
+      "text": "Kadang terasa berat.",
+      "emotion": "sad",
+      "gesture": "idle",
+      "duration": 3
+    },
+    {
+      "text": "Tapi aku tidak menyerah.",
+      "emotion": "neutral",
+      "gesture": "point",
+      "duration": 3
+    },
+    {
+      "text": "Aku yakin semuanya akan lebih baik.",
+      "emotion": "happy",
+      "gesture": "raise_hand",
+      "duration": 4
+    }
   ]
 }
