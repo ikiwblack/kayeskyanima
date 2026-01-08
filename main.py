@@ -18,23 +18,18 @@ with open("script.txt", encoding="utf-8") as f:
 if not text.strip():
     raise ValueError("Naskah kosong")
 
-# ===== MODE ANALYZE (TANPA RENDER) =====
-if MODE == "analyze":
-    timeline = analyze(text)
-
-    errors = validate_timeline(timeline)
-    if errors:
-        raise ValueError("Timeline tidak valid:\n" + "\n".join(errors))
-
-    print("OK")
-    sys.exit(0)
-
-# ===== MODE RENDER =====
 timeline = analyze(text)
 
 errors = validate_timeline(timeline)
 if errors:
-    raise ValueError("Timeline tidak valid:\n" + "\n".join(errors))
+    raise ValueError("\n".join(errors))
+
+if MODE == "analyze":
+    import json
+    json.dump(timeline, open("timeline.json", "w", encoding="utf-8"),
+              indent=2, ensure_ascii=False)
+    print("OK")
+    sys.exit(0)
 
 generate_audio(text)
 render_all(timeline)
