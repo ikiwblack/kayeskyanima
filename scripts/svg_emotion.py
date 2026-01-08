@@ -56,22 +56,15 @@ def apply_mouth(root, mouth_open):
 # =====================
 # MAIN ENTRY
 # =====================
-def apply_emotion(
-    base_tree,
-    emotion,
-    mouth_open,
-    frame,
-    fps
-):
-    """
-    base_tree: etree parsed SVG (immutable)
-    return: etree.ElementTree
-    """
+def apply_emotion(base_tree, emotion, mouth_open, frame, fps, gesture=None):
     tree = deepcopy(base_tree)
     root = tree.getroot()
 
     apply_blink(root, frame, fps)
     apply_head_nod(root, frame, fps, emotion)
     apply_mouth(root, mouth_open)
+
+    if gesture:
+        apply_gesture(root, gesture)
 
     return tree
