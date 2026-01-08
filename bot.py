@@ -4,22 +4,38 @@ from telegram.ext import Application, MessageHandler, filters
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
+if not BOT_TOKEN:
+    raise RuntimeError("TELEGRAM_BOT_TOKEN belum diset")
+
 async def handle_text(update, context):
-    text = update.message.text
+    user_text = update.message.text
 
-    await update.message.reply_text("⏳ Memproses naskah...")
+    await update.message.reply_text("⏳ Menganalisis naskah...")
 
-    # Simpan naskah
     with open("script.txt", "w", encoding="utf-8") as f:
-        f.write(text)
+        f.write(user_text)
 
-    # Jalankan pipeline utama
-    subprocess.run(["python", "main.py"], check=True)
+    try:
+        subprocess.run(
+            ["python", "main.py"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr or e.stdout or "Unknown error"
 
-    # Kirim video
+        # Batasi panjang error agar tidak spam Telegram
+        error_msg = error_msg[-3500:]
+
+        await update.message.reply_text(
+            "❌ Gagal memproses video:\n\n" + error_msg
+        )
+        return
+
     await update.message.reply_video(
         video=open("output/video.mp4", "rb"),
-        caption="✅ Video selesai"
+        caption="✅ Video berhasil dibuat"
     )
 
 def main():
