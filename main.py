@@ -74,8 +74,11 @@ subprocess.run([
     "-i", "output/video_noaudio.mp4",
     "-i", "output/audio.wav",
     "-vf", "ass=output/subtitles.ass",
+    "-af",
+    "acompressor=threshold=-18dB:ratio=3:attack=5:release=200,"
+    "loudnorm=I=-16:LRA=11:TP=-1.5",
     "-c:v", "libx264",
     "-pix_fmt", "yuv420p",
     "-c:a", "aac",
     "output/video.mp4"
-], che
+], check=True)
