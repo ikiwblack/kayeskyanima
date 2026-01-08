@@ -1,18 +1,70 @@
 import os
 import json
 import subprocess
-from telegram.ext import (
-    Application, MessageHandler, CommandHandler, filters
+
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Update
 )
-from scripts.edit_timeline import edit_scene
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    filters
+)
 
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 
-USER_TIMELINE = {}
+# ===== STATE =====
+USER_TIMELINE = {}   # chat_id -> timeline dict
+USER_STATE = {}      # chat_id -> {"scene": int}
 
-async def handle_text(update, context):
+# ===== HELPER =====
+async def send_timeline_preview(chat_id, context):
+    timeline = USER_TIMELINE[chat_id]
+
+    text = "📝 *Preview Timeline*\n\n"
+    for i, s in enumerate(timeline["scenes"]):
+        text += f"{i+1}. [{s['emotion']}] {s['text']} ({s['duration']}s)\n"
+
+    keyboard = []
+    row = []
+    for i in range(len(timeline["scenes"])):
+        row.append(
+            InlineKeyboardButton(
+                f"✏️ Scene {i+1}",
+                callback_data=f"scene:{i+1}"
+            )
+        )
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    keyboard.append([
+        InlineKeyboardButton("🎬 Render", callback_data="render"),
+        InlineKeyboardButton("❌ Batal", callback_data="cancel")
+    ])
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# ===== TEXT INPUT (SCRIPT) =====
+async def handle_script(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    text = update.message.text
+    text = update.message.text.strip()
+
+    if not text:
+        await update.message.reply_text("❌ Naskah kosong.")
+        return
 
     with open("script.txt", "w", encoding="utf-8") as f:
         f.write(text)
@@ -20,73 +72,137 @@ async def handle_text(update, context):
     await update.message.reply_text("🔍 Analisis naskah...")
 
     try:
-        subprocess.run(["python", "main.py", "analyze"],
-                       capture_output=True, text=True, check=True)
+        subprocess.run(
+            ["python", "main.py", "analyze"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
     except subprocess.CalledProcessError as e:
         await update.message.reply_text("❌ Analisis gagal:\n" + e.stderr)
         return
 
-    timeline = json.load(open("timeline.json"))
+    timeline = json.load(open("timeline.json", encoding="utf-8"))
     USER_TIMELINE[chat_id] = timeline
 
-    preview = "\n".join(
-        f"{i+1}. [{s['emotion']}] {s['text']} ({s['duration']}s)"
-        for i, s in enumerate(timeline["scenes"])
-    )
+    await send_timeline_preview(chat_id, context)
 
-    await update.message.reply_text(
-        "📝 PREVIEW TIMELINE:\n\n"
-        + preview +
-        "\n\nGunakan /edit, /scenes, lalu /render"
-    )
+# ===== CALLBACK BUTTON =====
+async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    chat_id = query.message.chat.id
+    data = query.data
+    await query.answer()
 
-async def scenes(update, context):
-    t = USER_TIMELINE.get(update.effective_chat.id)
-    if not t:
-        await update.message.reply_text("Belum ada timeline.")
-        return
+    # ===== PILIH SCENE =====
+    if data.startswith("scene:"):
+        idx = int(data.split(":")[1])
+        USER_STATE[chat_id] = {"scene": idx}
+        s = USER_TIMELINE[chat_id]["scenes"][idx - 1]
 
-    msg = "\n".join(
-        f"{i+1}. [{s['emotion']}] {s['text']} ({s['duration']}s)"
-        for i, s in enumerate(t["scenes"])
-    )
-    await update.message.reply_text(msg)
+        keyboard = [
+            [InlineKeyboardButton("📝 Text", callback_data="edit:text")],
+            [InlineKeyboardButton("🎭 Emotion", callback_data="edit:emotion")],
+            [InlineKeyboardButton("⏱ Duration", callback_data="edit:duration")],
+            [InlineKeyboardButton("⬅️ Kembali", callback_data="back")]
+        ]
 
-async def edit(update, context):
-    try:
-        idx = int(context.args[0])
-        field = context.args[1]
-        value = " ".join(context.args[2:])
-        USER_TIMELINE[update.effective_chat.id] = edit_scene(
-            USER_TIMELINE[update.effective_chat.id], idx, field, value
+        await query.edit_message_text(
+            f"Edit Scene {idx}:\n\"{s['text']}\"",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
-        await update.message.reply_text("✅ Scene diperbarui")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
-
-async def render(update, context):
-    t = USER_TIMELINE.get(update.effective_chat.id)
-    if not t:
-        await update.message.reply_text("Tidak ada timeline.")
         return
 
-    json.dump(t, open("timeline.json", "w", encoding="utf-8"),
-              indent=2, ensure_ascii=False)
+    # ===== EDIT EMOTION =====
+    if data == "edit:emotion":
+        keyboard = [
+            [
+                InlineKeyboardButton("sad", callback_data="emotion:sad"),
+                InlineKeyboardButton("happy", callback_data="emotion:happy")
+            ],
+            [
+                InlineKeyboardButton("thinking", callback_data="emotion:thinking"),
+                InlineKeyboardButton("neutral", callback_data="emotion:neutral")
+            ],
+            [InlineKeyboardButton("⬅️ Kembali", callback_data="back")]
+        ]
+        await query.edit_message_text(
+            "Pilih emotion:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
 
-    await update.message.reply_text("🎬 Rendering dimulai...")
-    subprocess.run(["python", "main.py", "render"], check=True)
+    if data.startswith("emotion:"):
+        emotion = data.split(":")[1]
+        idx = USER_STATE[chat_id]["scene"] - 1
+        USER_TIMELINE[chat_id]["scenes"][idx]["emotion"] = emotion
+        await send_timeline_preview(chat_id, context)
+        return
 
-    await update.message.reply_video(
-        video=open("output/video.mp4", "rb"),
-        caption="✅ Video selesai"
-    )
+    # ===== EDIT DURATION =====
+    if data == "edit:duration":
+        keyboard = [
+            [
+                InlineKeyboardButton("3", callback_data="duration:3"),
+                InlineKeyboardButton("4", callback_data="duration:4"),
+                InlineKeyboardButton("5", callback_data="duration:5")
+            ],
+            [
+                InlineKeyboardButton("6", callback_data="duration:6"),
+                InlineKeyboardButton("7", callback_data="duration:7"),
+                InlineKeyboardButton("8", callback_data="duration:8")
+            ],
+            [InlineKeyboardButton("⬅️ Kembali", callback_data="back")]
+        ]
+        await query.edit_message_text(
+            "Pilih durasi (detik):",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
 
+    if data.startswith("duration:"):
+        dur = int(data.split(":")[1])
+        idx = USER_STATE[chat_id]["scene"] - 1
+        USER_TIMELINE[chat_id]["scenes"][idx]["duration"] = dur
+        await send_timeline_preview(chat_id, context)
+        return
+
+    # ===== NAVIGATION =====
+    if data == "back":
+        await send_timeline_preview(chat_id, context)
+        return
+
+    if data == "cancel":
+        USER_STATE.pop(chat_id, None)
+        USER_TIMELINE.pop(chat_id, None)
+        await query.edit_message_text("❌ Dibatalkan.")
+        return
+
+    # ===== RENDER =====
+    if data == "render":
+        json.dump(
+            USER_TIMELINE[chat_id],
+            open("timeline.json", "w", encoding="utf-8"),
+            indent=2,
+            ensure_ascii=False
+        )
+
+        await query.edit_message_text("🎬 Rendering dimulai...")
+        subprocess.run(["python", "main.py", "render"], check=True)
+
+        await context.bot.send_video(
+            chat_id=chat_id,
+            video=open("output/video.mp4", "rb"),
+            caption="✅ Video selesai"
+        )
+
+# ===== START BOT =====
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
-    app.add_handler(CommandHandler("scenes", scenes))
-    app.add_handler(CommandHandler("edit", edit))
-    app.add_handler(CommandHandler("render", render))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_script))
+    app.add_handler(CallbackQueryHandler(on_button))
+
     app.run_polling()
 
 if __name__ == "__main__":
