@@ -1,17 +1,18 @@
 import os
 import json
 from openai import OpenAI
+from scripts.cache import load_cached_timeline, save_cached_timeline
 
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-PROMPT = """Kamu adalah sistem yang mengubah naskah menjadi timeline animasi.
+PROMPT = """
+Ubah naskah menjadi timeline animasi.
 
 ATURAN:
 - Output HARUS JSON valid
-- Jangan beri penjelasan
 - Maksimal 10 scene
-- Emotion hanya boleh: neutral, sad, happy, thinking, angry
-- Durasi 3–6 detik per scene
+- Emotion hanya: neutral, sad, happy, thinking, angry
+- Durasi 3–6 detik
 
 FORMAT:
 {
@@ -25,22 +26,22 @@ NASKAH:
 <<<TEXT>>>
 """
 
-def analyze(text):
-    response = client.chat.completions.create(
+def analyze(text: str) -> dict:
+    cached = load_cached_timeline(text)
+    if cached:
+        return cached
+
+    resp = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "user",
-                "content": PROMPT.replace("<<<TEXT>>>", text)
-            }
-        ],
+        messages=[{
+            "role": "user",
+            "content": PROMPT.replace("<<<TEXT>>>", text)
+        }],
         temperature=0.3
     )
 
-    content = response.choices[0].message.content
+    content = resp.choices[0].message.content
     timeline = json.loads(content)
 
-    with open("timeline.json", "w", encoding="utf-8") as f:
-        json.dump(timeline, f, indent=2, ensure_ascii=False)
-
+    save_cached_timeline(text, timeline)
     return timeline
