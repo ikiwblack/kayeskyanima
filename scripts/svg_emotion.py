@@ -1,56 +1,77 @@
 from lxml import etree
 import math
+from copy import deepcopy
 
 NS = {"svg": "http://www.w3.org/2000/svg"}
 
-def clamp(v, lo, hi):
-    return max(lo, min(v, hi))
-
-def apply_emotion(
-    svg_in: str,
-    svg_out: str,
-    emotion: str,
-    mouth_open: float,
-    frame: int = 0,
-    fps: int = 24
-):
-    tree = etree.parse(svg_in)
-    root = tree.getroot()
-
-    # =========================
-    # EYE BLINK (REAL)
-    # =========================
-    eyes_open = root.xpath("//*[@id='eyes_open']", namespaces=NS)
-    eyes_closed = root.xpath("//*[@id='eyes_closed']", namespaces=NS)
-
-    # Blink every 3–5 seconds
-    blink_interval = fps * 4
-    blink_len = 3  # frames
+# =====================
+# BLINK
+# =====================
+def apply_blink(root, frame, fps):
+    blink_interval = fps * 4     # tiap ±4 detik
+    blink_len = 2                # 2 frame
 
     blinking = (frame % blink_interval) < blink_len
 
-    if eyes_open and eyes_closed:
-        eyes_open[0].attrib["display"] = "none" if blinking else "inline"
-        eyes_closed[0].attrib["display"] = "inline" if blinking else "none"
+    for eye_id in ("eye_left", "eye_right"):
+        eyes = root.xpath(f"//*[@id='{eye_id}']", namespaces=NS)
+        if not eyes:
+            continue
+        eyes[0].attrib["r"] = "1" if blinking else "6"
 
-    # Emotion modifier
-    if emotion == "sad" and eyes_open:
-        eyes_open[0].attrib["transform"] = "scale(1 0.85)"
 
-    # =========================
-    # MOUTH LIP SYNC (IMPROVED)
-    # =========================
-    mouth = root.xpath("//*[@id='mouth']", namespaces=NS)
-    if mouth:
-        m = clamp(mouth_open, 0.0, 1.0)
+# =====================
+# HEAD NOD
+# =====================
+def apply_head_nod(root, frame, fps, emotion):
+    heads = root.xpath("//*[@id='head_group']", namespaces=NS)
+    if not heads:
+        return
 
-        # Non-linear (natural speech)
-        eased = math.sqrt(m)
+    t = frame / fps
 
-        base_y = 210
-        max_open = 24
-        y = base_y + int(eased * max_open)
+    if emotion == "thinking":
+        angle = math.sin(t * 1.5) * 6
+    elif emotion == "happy":
+        angle = math.sin(t * 2.5) * 4
+    else:
+        angle = 0
 
-        mouth[0].attrib["d"] = f"M236 200 Q256 {y} 276 200"
+    heads[0].attrib["transform"] = f"rotate({angle:.2f} 256 180)"
 
-    tree.write(svg_out, encoding="utf-8", xml_declaration=True)
+
+# =====================
+# MOUTH (LIP SYNC)
+# =====================
+def apply_mouth(root, mouth_open):
+    mouths = root.xpath("//*[@id='mouth']", namespaces=NS)
+    if not mouths:
+        return
+
+    base_y = 210
+    delta = int(mouth_open * 18)
+    mouths[0].attrib["d"] = f"M236 200 Q256 {base_y + delta} 276 200"
+
+
+# =====================
+# MAIN ENTRY
+# =====================
+def apply_emotion(
+    base_tree,
+    emotion,
+    mouth_open,
+    frame,
+    fps
+):
+    """
+    base_tree: etree parsed SVG (immutable)
+    return: etree.ElementTree
+    """
+    tree = deepcopy(base_tree)
+    root = tree.getroot()
+
+    apply_blink(root, frame, fps)
+    apply_head_nod(root, frame, fps, emotion)
+    apply_mouth(root, mouth_open)
+
+    return tree
