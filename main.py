@@ -1,14 +1,16 @@
 import os
+from scripts.analyze_text import analyze
 from scripts.render_frames import render_all
 from scripts.subtitles import build_srt
 from scripts.tts_dummy import generate_audio
-import json
 import subprocess
 
 os.makedirs("output/frames", exist_ok=True)
 
-timeline = json.load(open("timeline.json"))
-text = open("script.txt").read()
+with open("script.txt", encoding="utf-8") as f:
+    text = f.read()
+
+timeline = analyze(text)
 
 generate_audio(text)
 render_all(timeline)
