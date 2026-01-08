@@ -3,3 +3,4 @@ Pillow
 cairosvg
 lxml
 openai
+numpy
