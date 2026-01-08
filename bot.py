@@ -1,3 +1,4 @@
+
 import os
 import json
 import subprocess
@@ -75,6 +76,15 @@ async def ask_for_character_type(chat_id, context, char_index, is_edit=False):
         await context.bot.edit_message_text(chat_id=chat_id, message_id=context.message_id, text=text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
     else:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+# ===== COMMAND HANDLERS =====
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sends a welcome message when the /start command is issued."""
+    await update.message.reply_text(
+        "👋 Halo! Saya adalah bot pembuat video Anima.\n\n"
+        "Kirimkan saya naskah Anda untuk memulai, dan saya akan memandu Anda melalui prosesnya. "
+        "Cukup ketik atau tempel teks Anda langsung di obrolan ini."
+    )
 
 # ===== TEXT INPUT (SCRIPT) =====
 async def handle_script(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -231,6 +241,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_script))
     app.add_handler(CallbackQueryHandler(on_button))
     app.run_polling()
