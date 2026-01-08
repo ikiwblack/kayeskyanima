@@ -5,17 +5,19 @@
     { "id": "b", "x": 650, "color": "&HFF99FF&" }
   ],
   "scenes": [
-    {
-      "speaker": "a",
-      "text": "Halo, ini karakter A.",
-      "emotion": "happy",
-      "bg": "neutral",
-      "duration": 3
-    },
+{
+  "speaker": "a",
+  "text": "Halo",
+  "emotion": "happy",
+  "gesture": "raise_hand",
+  "bg": "neutral",
+  "duration": 3
+},
     {
       "speaker": "b",
       "text": "Dan saya karakter B.",
       "emotion": "thinking",
+      "gesture": "raise_hand",
       "bg": "room",
       "duration": 3
     }
