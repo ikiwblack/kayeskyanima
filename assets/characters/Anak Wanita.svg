@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+
+  <rect id="body" x="226" y="300" width="60" height="100" rx="15" fill="#6C63FF"/>
+
+  <g id="head_group">
+    <circle id="head" cx="256" cy="240" r="50" fill="#FFD6A5"/>
+    <path d="M280 190 L 300 170 L 290 210 Z" fill="#FF69B4"/>
+    <path d="M290 190 L 310 170 L 300 210 Z" fill="#FF69B4"/>
+
+    <g id="eyes_open">
+      <circle id="eye_left_open" cx="241" cy="230" r="5" fill="#000"/>
+      <circle id="eye_right_open" cx="271" cy="230" r="5" fill="#000"/>
+    </g>
+
+    <g id="eyes_closed" display="none">
+      <path id="eye_left_closed" d="M231 230 Q241 235 251 230" stroke="#000" stroke-width="2" fill="none"/>
+      <path id="eye_right_closed" d="M261 230 Q271 235 281 230" stroke="#000" stroke-width="2" fill="none"/>
+    </g>
+
+    <path id="mouth" d="M241 260 Q256 270 271 260"
+          stroke="#000" stroke-width="3" fill="none"/>
+  </g>
+
+  <rect id="arm_left" x="200" y="310" width="20" height="70" rx="10" fill="#FFD6A5"/>
+  <rect id="arm_right" x="292" y="310" width="20" height="70" rx="10" fill="#FFD6A5"/>
+
+</svg>

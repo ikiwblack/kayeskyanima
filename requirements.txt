@@ -2,5 +2,5 @@ python-telegram-bot==20.*
 Pillow
 cairosvg
 lxml
-openai
+google-generativeai
 numpy

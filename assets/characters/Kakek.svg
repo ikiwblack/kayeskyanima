@@ -5,6 +5,8 @@
   <g id="head_group">
     <circle id="head" cx="256" cy="180" r="60" fill="#FFD6A5"/>
 
+    <path d="M220 140 Q256 120 292 140" stroke="#BDBDBD" stroke-width="10" fill="none"/>
+
     <g id="eyes_open">
       <circle id="eye_left_open" cx="236" cy="170" r="6" fill="#000"/>
       <circle id="eye_right_open" cx="276" cy="170" r="6" fill="#000"/>
@@ -17,6 +19,9 @@
 
     <path id="mouth" d="M236 200 Q256 210 276 200"
           stroke="#000" stroke-width="4" fill="none"/>
+
+    <path d="M220 220 Q230 225 240 220" stroke="#000" stroke-width="2" fill="none"/>
+    <path d="M270 220 Q280 225 290 220" stroke="#000" stroke-width="2" fill="none"/>
   </g>
 
   <rect id="arm_left" x="170" y="270" width="30" height="90" rx="15" fill="#FFD6A5"/>

@@ -49,12 +49,18 @@ def svg_tree_to_image(tree):
 # =====================
 # RENDER CORE
 # =====================
-def render_all(timeline, output_video):
+def render_all(timeline, characters_map, output_video):
     fps = timeline["fps"]
     envelope = load_audio_envelope("output/audio.wav", fps)
 
-    # preload base SVG sekali
-    base_tree = etree.parse("assets/character_base.svg")
+    # Preload all character SVGs based on the map
+    character_svgs = {}
+    for char_id, char_info in characters_map.items():
+        char_type = char_info["type"]
+        svg_path = f"assets/characters/{char_type}.svg"
+        if char_type not in character_svgs:
+            character_svgs[char_type] = etree.parse(svg_path)
+
 
     ffmpeg = subprocess.Popen([
         "ffmpeg", "-y",
@@ -81,10 +87,14 @@ def render_all(timeline, output_video):
         for _ in range(frames):
             frame = bg_img.copy()
 
-            for char in timeline["characters"]:
+            for char_in_scene in timeline["characters"]:
+                char_id = char_in_scene["id"]
+                char_type = characters_map[char_id]["type"]
+                base_tree = character_svgs[char_type]
+
                 mouth = (
                     envelope[min(frame_idx, len(envelope) - 1)]
-                    if char["id"] == scene["speaker"]
+                    if char_id == scene["speaker"]
                     else 0.0
                 )
 
@@ -93,11 +103,12 @@ def render_all(timeline, output_video):
                     emotion=scene["emotion"],
                     mouth_open=mouth,
                     frame=frame_idx,
-                    fps=fps
+                    fps=fps,
+                    gesture=scene.get("gesture")
                 )
 
                 char_img = svg_tree_to_image(char_tree)
-                frame.alpha_composite(char_img, (char["x"], 900))
+                frame.alpha_composite(char_img, (char_in_scene["x"], 900))
 
             ffmpeg.stdin.write(frame.tobytes())
             frame_idx += 1

@@ -5,6 +5,39 @@ from copy import deepcopy
 NS = {"svg": "http://www.w3.org/2000/svg"}
 
 # =====================
+# GESTURE
+# =====================
+def apply_gesture(root, gesture, frame, fps):
+    if gesture == "raise_hand":
+        hands = root.xpath("//*[@id='hand_right']", namespaces=NS)
+        if hands:
+            hands[0].attrib["transform"] = "rotate(-25 256 250)"
+
+    elif gesture == "walk":
+        t = frame / fps
+        # Body bobbing
+        body = root.xpath("//*[@id='body_group']", namespaces=NS)
+        if body:
+            y_offset = math.sin(t * 5) * 4
+            body[0].attrib["transform"] = f"translate(0 {y_offset})"
+
+        # Leg movement
+        leg_l = root.xpath("//*[@id='leg_left']", namespaces=NS)
+        leg_r = root.xpath("//*[@id='leg_right']", namespaces=NS)
+        if leg_l and leg_r:
+            angle = math.sin(t * 5) * 20
+            leg_l[0].attrib["transform"] = f"rotate({angle} 256 370)"
+            leg_r[0].attrib["transform"] = f"rotate({-angle} 256 370)"
+
+        # Arm swing
+        hand_l = root.xpath("//*[@id='hand_left']", namespaces=NS)
+        hand_r = root.xpath("//*[@id='hand_right']", namespaces=NS)
+        if hand_l and hand_r:
+            angle = math.sin(t * 5) * 15
+            hand_l[0].attrib["transform"] = f"rotate({-angle} 256 250)"
+            hand_r[0].attrib["transform"] = f"rotate({angle} 256 250)"
+
+# =====================
 # BLINK
 # =====================
 def apply_blink(root, frame, fps):
@@ -34,6 +67,8 @@ def apply_head_nod(root, frame, fps, emotion):
         angle = math.sin(t * 1.5) * 6
     elif emotion == "happy":
         angle = math.sin(t * 2.5) * 4
+    elif emotion == "angry":
+        angle = math.sin(t * 8) * 1.5
     else:
         angle = 0
 
@@ -65,6 +100,6 @@ def apply_emotion(base_tree, emotion, mouth_open, frame, fps, gesture=None):
     apply_mouth(root, mouth_open)
 
     if gesture:
-        apply_gesture(root, gesture)
+        apply_gesture(root, gesture, frame, fps)
 
     return tree

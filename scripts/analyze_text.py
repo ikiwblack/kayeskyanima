@@ -1,10 +1,11 @@
 import os
 import json
 import re
-from openai import OpenAI
+import google.generativeai as genai
 from scripts.cache import load_cached_timeline, save_cached_timeline
 
-client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 PROMPT = """
 Ubah naskah menjadi timeline animasi.
@@ -12,7 +13,8 @@ Ubah naskah menjadi timeline animasi.
 ATURAN:
 - Output HARUS JSON valid
 - Maksimal 10 scene
-- Emotion hanya: neutral, sad, happy, thinking, angry
+- Emotion hanya: neutral, sad, happy, thinking, angry, surprised
+- Gesture (opsional) hanya: raise_hand, walk
 - Durasi 3–6 detik
 
 WAJIB FORMAT:
@@ -28,7 +30,8 @@ WAJIB FORMAT:
       "text": "...",
       "emotion": "happy",
       "bg": "neutral",
-      "duration": 4
+      "duration": 4,
+      "gesture": "walk"
     }
   ]
 }
@@ -38,24 +41,34 @@ NASKAH:
 """
 
 def extract_json(text: str) -> dict:
+    # Gemini may return JSON inside ```json ... ``` markdown.
+    text = text.strip()
+    if text.startswith("```json"):
+        text = text[7:]
+    if text.endswith("```"):
+        text = text[:-3]
+
     match = re.search(r"\{[\s\S]*\}", text)
     if not match:
-        raise ValueError("GPT tidak mengembalikan JSON")
+        raise ValueError("Gemini tidak mengembalikan JSON yang valid")
     return json.loads(match.group())
 
 def analyze(text: str) -> dict:
+    """Analyzes the script text and returns a timeline dictionary."""
     cached = load_cached_timeline(text)
     if cached:
         return cached
 
-    resp = client.responses.create(
-        model="gpt-4o-mini",
-        input=PROMPT.replace("<<<TEXT>>>", text),
-        temperature=0.3
-    )
+    prompt_with_text = PROMPT.replace("<<<TEXT>>>", text)
 
-    raw = resp.output_text
-    timeline = extract_json(raw)
+    # Call the Gemini API
+    response = model.generate_content(prompt_with_text)
 
-    save_cached_timeline(text, timeline)
-    return timeline
+    try:
+        raw_text = response.text
+        timeline = extract_json(raw_text)
+
+        save_cached_timeline(text, timeline)
+        return timeline
+    except (ValueError, AttributeError) as e:
+        raise ValueError(f"Gagal memproses response dari Gemini: {e}") from e
