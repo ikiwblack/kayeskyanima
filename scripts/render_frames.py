@@ -1,11 +1,14 @@
-from PIL import Image
 import os
 import math
+from PIL import Image
+
 from scripts.svg_emotion import apply_emotion
 from scripts.render_svg import svg_to_png
 
 FPS = 12
 W, H = 1080, 1920
+
+os.makedirs("output/frames", exist_ok=True)
 
 def motion(i, frames, emotion):
     t = i / frames
@@ -15,32 +18,36 @@ def motion(i, frames, emotion):
         return int(t * 15)
     return 0
 
-def render_scene(scene, start):
+def render_scene(scene, start_frame):
     frames = int(scene["duration"] * FPS)
-    pose = scene["emotion"] if scene["emotion"] != "neutral" else scene["action"]
-
-    char = Image.open(f"assets/character/{pose}.png").convert("RGBA")
-    bg = Image.open("assets/bg/neutral.png").convert("RGBA").resize((W, H))
 
     for i in range(frames):
-        frame = bg.copy()
-        y = motion(i, frames, scene["emotion"])
-        frame.paste(char, (400, 900 + y), char)
-        frame.save(f"output/frames/frame_{start+i:05d}.png")
+        idx = start_frame + i
 
-    return start + frames
+        svg_temp = f"output/tmp_{idx}.svg"
+        png_out = f"output/frames/frame_{idx:05d}.png"
+
+        # Apply emotion to SVG
+        apply_emotion(
+            "assets/character_base.svg",
+            svg_temp,
+            scene["emotion"]
+        )
+
+        # Render SVG → PNG
+        svg_to_png(svg_temp, png_out)
+
+        # Apply motion (Y shift)
+        img = Image.open(png_out).convert("RGBA")
+        bg = Image.new("RGBA", (W, H), (255, 255, 255, 255))
+
+        y = motion(i, frames, scene["emotion"])
+        bg.paste(img, (284, 700 + y), img)
+        bg.save(png_out)
+
+    return start_frame + frames
 
 def render_all(timeline):
     frame = 0
     for scene in timeline["scenes"]:
         frame = render_scene(scene, frame)
-
-def render_scene(scene, idx):
-    svg_temp = f"output/tmp_{idx}.svg"
-    png_out = f"output/frames/frame_{idx:05d}.png"
-
-    apply_emotion(
-        "assets/character_base.svg",
-        svg_temp,
-        scene["emotion"]
-    )
