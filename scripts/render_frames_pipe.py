@@ -1,109 +1,85 @@
-import os
-import math
 import subprocess
+import json
+import cairosvg
 from io import BytesIO
 from PIL import Image
-
-import cairosvg
+import math
+import wave
+import numpy as np
+import os
 
 from scripts.svg_emotion import apply_emotion
-from scripts.svg_gesture import apply_gesture
 
-# =====================
-# CONFIG
-# =====================
-FPS = 12
 W, H = 1080, 1920
-CHAR_W = 512
-CHAR_H = 512
 
-BG_COLOR = (255, 255, 255, 255)
+# ======================
+# AUDIO ENVELOPE
+# ======================
+def load_audio_envelope(wav_path, fps):
+    with wave.open(wav_path, "rb") as wf:
+        raw = wf.readframes(wf.getnframes())
+        audio = np.frombuffer(raw, dtype=np.int16)
 
-# =====================
-# SVG → PIL IMAGE (MEMORY)
-# =====================
+    audio = audio / max(1, np.max(np.abs(audio)))
+    samples_per_frame = int(len(audio) / (wf.getnframes() / wf.getframerate() * fps))
+
+    env = []
+    for i in range(0, len(audio), samples_per_frame):
+        env.append(float(np.mean(np.abs(audio[i:i+samples_per_frame]))))
+    return env
+
+
+# ======================
+# SVG → PIL
+# ======================
 def svg_to_image(svg_path):
-    png_bytes = cairosvg.svg2png(
-        url=svg_path,
-        output_width=CHAR_W,
-        output_height=CHAR_H
-    )
-    return Image.open(BytesIO(png_bytes)).convert("RGBA")
+    png = cairosvg.svg2png(url=svg_path, output_width=W, output_height=H)
+    return Image.open(BytesIO(png)).convert("RGBA")
 
-# =====================
-# MOTION
-# =====================
-def motion_y(i, frames, emotion):
-    t = i / frames
-    if emotion == "happy":
-        return int(math.sin(t * 6) * 20)
-    if emotion == "sad":
-        return int(t * 15)
-    return 0
 
-# =====================
-# MAIN RENDER
-# =====================
-def render_all(timeline, output_video="output/video.mp4"):
-    os.makedirs("output", exist_ok=True)
+# ======================
+# RENDER PIPE
+# ======================
+def render_all(timeline, output_video):
+    fps = timeline["fps"]
+    env = load_audio_envelope("output/audio.wav", fps)
 
-    total_frames = sum(int(s["duration"] * FPS) for s in timeline["scenes"])
-
-    ffmpeg = subprocess.Popen(
-        [
-            "ffmpeg",
-            "-y",
-            "-f", "rawvideo",
-            "-pix_fmt", "rgba",
-            "-s", f"{W}x{H}",
-            "-r", str(FPS),
-            "-i", "-",
-            "-c:v", "libx264",
-            "-pix_fmt", "yuv420p",
-            output_video
-        ],
-        stdin=subprocess.PIPE
-    )
+    ffmpeg = subprocess.Popen([
+        "ffmpeg",
+        "-y",
+        "-f", "rawvideo",
+        "-pix_fmt", "rgba",
+        "-s", f"{W}x{H}",
+        "-r", str(fps),
+        "-i", "-",
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        output_video
+    ], stdin=subprocess.PIPE)
 
     frame_index = 0
 
     for scene in timeline["scenes"]:
-        frames = int(scene["duration"] * FPS)
-        emotion = scene.get("emotion", "neutral")
-        gesture = scene.get("gesture", "idle")
+        frames = int(scene["duration"] * fps)
+        bg = svg_to_image(f"assets/backgrounds/{scene.get('bg','neutral')}.svg")
 
         for i in range(frames):
-            t = i / frames
+            frame = bg.copy()
 
-            # ===== SVG PROCESS (IN MEMORY) =====
-            svg_emotion = f"/tmp/emotion_{frame_index}.svg"
-            svg_final = f"/tmp/final_{frame_index}.svg"
+            for char in timeline["characters"]:
+                mouth = env[min(frame_index, len(env)-1)] if char["id"] == scene["speaker"] else 0
 
-            apply_emotion(
-                "assets/character_base.svg",
-                svg_emotion,
-                emotion,
-                t
-            )
+                tmp_svg = "output/tmp.svg"
+                apply_emotion(
+                    "assets/character_base.svg",
+                    tmp_svg,
+                    scene["emotion"],
+                    mouth
+                )
 
-            apply_gesture(
-                svg_emotion,
-                svg_final,
-                gesture
-            )
+                char_img = svg_to_image(tmp_svg)
+                frame.alpha_composite(char_img, (char["x"], 900))
 
-            char_img = svg_to_image(svg_final)
-
-            # ===== COMPOSITE FRAME =====
-            frame = Image.new("RGBA", (W, H), BG_COLOR)
-
-            y = motion_y(i, frames, emotion)
-            x_pos = (W - CHAR_W) // 2
-            y_pos = 720 + y
-
-            frame.paste(char_img, (x_pos, y_pos), char_img)
-
-            # ===== PIPE TO FFMPEG =====
             ffmpeg.stdin.write(frame.tobytes())
             frame_index += 1
 
