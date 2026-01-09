@@ -1,7 +1,7 @@
 import os
 import json
 import re
-import google.generativeai as genai
+import google.genai as genai
 from scripts.cache import load_cached_timeline, save_cached_timeline
 
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
