@@ -17,7 +17,6 @@ if "GOOGLE_CREDENTIALS_JSON" in os.environ:
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_path
 # --- End of Authentication Block ---
 
-# Import a new module for audio processing that we will create
 from scripts.process_audio import process_audio_and_update_timeline
 from scripts.analyze_text import analyze
 from scripts.validate_timeline import validate_timeline
@@ -38,31 +37,32 @@ if not text:
 if not os.path.exists("characters.json"):
     raise FileNotFoundError("File characters.json tidak ditemukan. Jalankan bot untuk memilih karakter.")
 
+# Load characters.json and transform it into a dictionary keyed by character ID
 with open("characters.json", encoding="utf-8") as f:
-    characters_map = json.load(f)
+    characters_data = json.load(f)
+    characters_map = {char['id']: char for char in characters_data['characters']}
 
 # Get initial timeline from analyzer or file
-# Note: In the bot flow, `analyze` is always called first.
 if os.path.exists("timeline.json") and MODE != "analyze":
     with open("timeline.json", encoding="utf-8") as f:
         timeline = json.load(f)
 else:
-    timeline = analyze(text)
+    # This assumes a default orientation if not run from bot, adjust if necessary
+    timeline = analyze(text, '9:16')
 
 # Inject character *type* into the timeline structure for the renderer
 for char_data in timeline.get("characters", []):
     char_id = char_data.get("id")
-    if char_id in characters_map:
-        char_data["type"] = characters_map[char_id]["type"]
+    details = characters_map.get(char_id)
+    if details:
+        char_data["type"] = details.get("type")
 
 # Validate the basic structure
 errors = validate_timeline(timeline)
 if errors:
-    # In case of validation errors, raise them to be caught by the bot
     raise ValueError("\n".join(errors))
 
 # If we are in 'analyze' mode (called by the bot), we stop here.
-# The bot gets the timeline and waits for user confirmation.
 if MODE == "analyze":
     with open("timeline.json", "w", encoding="utf-8") as f:
         json.dump(timeline, f, indent=2, ensure_ascii=False)
@@ -72,12 +72,9 @@ if MODE == "analyze":
 # --- RENDER MODE --- (Called after user clicks 'Render' in the bot)
 
 print("📢 Menghasilkan audio dan menyinkronkan durasi timeline...")
-# This function will generate audio for each scene using the correct voice,
-# get the real duration, update the timeline with it, and create a final audio.wav
 updated_timeline = process_audio_and_update_timeline(timeline, characters_map)
 
 print("🖼️ Merender frame video...")
-# The renderer now gets the character map to know which SVG to load (e.g., 'Kakek.svg')
 render_all(
     timeline=updated_timeline,
     characters_map=characters_map,
@@ -85,19 +82,14 @@ render_all(
 )
 
 print("✍️ Membuat subtitle...")
-# Subtitles are built with the final, accurate durations
 build_ass(updated_timeline, "output/subtitles.ass")
 
 print("🎬 Menggabungkan semua file...")
-# The final command combines the visuals, the single concatenated audio track, and subtitles
 subprocess.run([
     "ffmpeg", "-y",
     "-i", "output/video_noaudio.mp4",
-    "-i", "output/audio.wav", # The single audio track from process_audio
+    "-i", "output/audio.wav",
     "-vf", "ass=output/subtitles.ass",
-    "-af",
-    "acompressor=threshold=-18dB:ratio=3:attack=5:release=200,",
-    "loudnorm=I=-16:LRA=11:TP=-1.5",
     "-c:v", "libx264",
     "-pix_fmt", "yuv420p",
     "-c:a", "aac",
