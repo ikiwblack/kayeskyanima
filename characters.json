@@ -21,12 +21,12 @@
       "color": "&H00FFC0CB&"
     },
     {
-      "id": "Anak Pria",
+      "id": "AnakPria",
       "svg": "assets/characters/Anak Pria.svg",
       "color": "&H00ADFF2F&"
     },
     {
-      "id": "Anak Wanita",
+      "id": "AnakWanita",
       "svg": "assets/characters/Anak Wanita.svg",
       "color": "&H007FFF00&"
     }
