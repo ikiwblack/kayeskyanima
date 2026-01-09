@@ -2,33 +2,27 @@
   "characters": [
     {
       "id": "Kakek",
-      "voice": "id-ID-Wavenet-B",
-      "svg": "templates/kakek.svg"
+      "svg": "assets/characters/Kakek.svg"
     },
     {
       "id": "Nenek",
-      "voice": "id-ID-Wavenet-A",
-      "svg": "templates/nenek.svg"
+      "svg": "assets/characters/Nenek.svg"
     },
     {
       "id": "Pria",
-      "voice": "id-ID-Standard-B",
-      "svg": "templates/pria.svg"
+      "svg": "assets/characters/Pria.svg"
     },
     {
       "id": "Wanita",
-      "voice": "id-ID-Standard-A",
-      "svg": "templates/wanita.svg"
+      "svg": "assets/characters/Wanita.svg"
     },
     {
-      "id": "AnakPria",
-      "voice": "id-ID-Standard-C",
-      "svg": "templates/anak_pria.svg"
+      "id": "Anak Pria",
+      "svg": "assets/characters/Anak Pria.svg"
     },
     {
-      "id": "AnakWanita",
-      "voice": "id-ID-Standard-D",
-      "svg": "templates/anak_wanita.svg"
+      "id": "Anak Wanita",
+      "svg": "assets/characters/Anak Wanita.svg"
     }
   ]
 }

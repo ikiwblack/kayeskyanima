@@ -3,19 +3,8 @@ import sys
 import json
 import subprocess
 
-# --- Google Cloud Authentication ---
-# On Railway, the GOOGLE_CREDENTIALS_JSON secret is set as an environment variable.
-# The google-cloud-texttospeech library needs to find these credentials in a file.
-# This code block writes the content of the environment variable to a temporary
-# file and then sets the GOOGLE_APPLICATION_CREDENTIALS environment variable
-# to point to that file.
-if "GOOGLE_CREDENTIALS_JSON" in os.environ:
-    creds_json_str = os.environ["GOOGLE_CREDENTIALS_JSON"]
-    creds_path = "/tmp/google_creds.json"
-    with open(creds_path, "w") as f:
-        f.write(creds_json_str)
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_path
-# --- End of Authentication Block ---
+# --- Google Cloud Authentication (REMOVED) ---
+# This block is no longer necessary as we are switching to gTTS.
 
 from scripts.process_audio import process_audio_and_update_timeline
 from scripts.analyze_text import analyze
@@ -50,12 +39,9 @@ else:
     # This assumes a default orientation if not run from bot, adjust if necessary
     timeline = analyze(text, '9:16')
 
-# Inject character *type* into the timeline structure for the renderer
-for char_data in timeline.get("characters", []):
-    char_id = char_data.get("id")
-    details = characters_map.get(char_id)
-    if details:
-        char_data["type"] = details.get("type")
+# Inject character details into the timeline structure for the renderer
+# The renderer now reads this directly from the timeline
+timeline["characters"] = characters_data["characters"] # Inject full character list
 
 # Validate the basic structure
 errors = validate_timeline(timeline)
@@ -77,7 +63,6 @@ updated_timeline = process_audio_and_update_timeline(timeline, characters_map)
 print("🖼️ Merender frame video...")
 render_all(
     timeline=updated_timeline,
-    characters_map=characters_map,
     output_video="output/video_noaudio.mp4"
 )
 

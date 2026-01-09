@@ -1,7 +1,8 @@
 import os
 import subprocess
-from google.cloud import texttospeech
 import wave
+from gtts import gTTS
+from pydub import AudioSegment
 
 OUTPUT_DIR = "output"
 SCENES_DIR = os.path.join(OUTPUT_DIR, "scenes")
@@ -19,8 +20,7 @@ def get_audio_duration(file_path):
         return 0
 
 def process_audio_and_update_timeline(timeline, character_map):
-    """Membuat file audio untuk setiap adegan, menggabungkannya, dan memperbarui durasi di timeline."""
-    client = texttospeech.TextToSpeechClient()
+    """Membuat file audio untuk setiap adegan menggunakan gTTS, menggabungkannya, dan memperbarui durasi di timeline."""
     updated_scenes = []
     scene_audio_files = []
 
@@ -28,35 +28,31 @@ def process_audio_and_update_timeline(timeline, character_map):
     for i, scene in enumerate(timeline["scenes"]):
         speaker_id = scene.get("speaker")
         text = scene.get("text", "")
+        scene_audio_path = os.path.join(SCENES_DIR, f"scene_{i}.wav")
 
         if not speaker_id or not text or text == "...":
             duration_sec = scene.get("duration", 0.5) # default silence duration
-            scene_audio_path = os.path.join(SCENES_DIR, f"scene_{i}_silence.wav")
-            from pydub import AudioSegment
             silence = AudioSegment.silent(duration=int(duration_sec * 1000))
             silence.export(scene_audio_path, format="wav")
             actual_duration = duration_sec
         else:
-            character_details = character_map.get(speaker_id)
-            if not character_details:
-                raise ValueError(f"Detail untuk karakter '{speaker_id}' tidak ditemukan di timeline.")
+            # Periksa apakah detail karakter ada (opsional, tapi bagus untuk validasi)
+            if not character_map.get(speaker_id):
+                raise ValueError(f"Detail untuk karakter '{speaker_id}' tidak ditemukan.")
 
-            voice_name = character_details.get("voice")
-            if not voice_name:
-                raise ValueError(f"Voice ID tidak ditemukan untuk karakter '{speaker_id}' di characters.json.")
+            # Buat audio dengan gTTS
+            tts = gTTS(text=text, lang='id', slow=False)
+            temp_mp3_path = os.path.join(SCENES_DIR, f"scene_{i}_temp.mp3")
+            tts.save(temp_mp3_path)
 
-            synthesis_input = texttospeech.SynthesisInput(text=text)
-            voice_params = texttospeech.VoiceSelectionParams(language_code="id-ID", name=voice_name)
-            audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.LINEAR16)
-
-            response = client.synthesize_speech(
-                input=synthesis_input, voice=voice_params, audio_config=audio_config
-            )
-
-            scene_audio_path = os.path.join(SCENES_DIR, f"scene_{i}.wav")
-            with open(scene_audio_path, "wb") as out:
-                out.write(response.audio_content)
+            # Konversi MP3 ke WAV menggunakan pydub
+            audio = AudioSegment.from_mp3(temp_mp3_path)
+            audio.export(scene_audio_path, format="wav")
             
+            # Hapus file MP3 sementara
+            os.remove(temp_mp3_path)
+
+            # Dapatkan durasi akurat dari file WAV yang baru dibuat
             actual_duration = get_audio_duration(scene_audio_path)
 
         scene_audio_files.append(scene_audio_path)
@@ -71,11 +67,14 @@ def process_audio_and_update_timeline(timeline, character_map):
     concat_list_path = os.path.join(OUTPUT_DIR, "concat_list.txt")
     with open(concat_list_path, "w") as f:
         for file_path in scene_audio_files:
-            f.write(f"file '{os.path.join('..', file_path)}'\n")
+            # Path harus relatif terhadap direktori kerja ffmpeg (OUTPUT_DIR)
+            relative_path = os.path.relpath(file_path, OUTPUT_DIR)
+            f.write(f"file '{relative_path}'\n")
 
     output_audio_path = os.path.join(OUTPUT_DIR, "audio.wav")
     
     try:
+        # Menjalankan ffmpeg dari direktori OUTPUT untuk menyederhanakan path
         subprocess.run([
             "ffmpeg", "-y",
             "-f", "concat",
@@ -85,7 +84,8 @@ def process_audio_and_update_timeline(timeline, character_map):
             os.path.basename(output_audio_path)
         ], check=True, cwd=OUTPUT_DIR, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        print("FFmpeg Error:", e.stderr)
+        print("FFmpeg Error Output:", e.stdout)
+        print("FFmpeg Error Stderr:", e.stderr)
         raise
 
     return timeline

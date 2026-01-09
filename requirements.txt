@@ -3,5 +3,5 @@ Pillow
 cairosvg
 lxml
 numpy
-google-cloud-texttospeech
+gTTS
 pydub
