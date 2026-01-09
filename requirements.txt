@@ -5,3 +5,4 @@ lxml
 numpy
 gTTS
 pydub
+tqdm
