@@ -3,32 +3,38 @@
     {
       "id": "Kakek",
       "svg": "assets/characters/Kakek.svg",
-      "color": "&H00FFFFFF&"
+      "color": "&H00FFFFFF&",
+      "pitch": 0.8
     },
     {
       "id": "Nenek",
       "svg": "assets/characters/Nenek.svg",
-      "color": "&H00E0FFFF&"
+      "color": "&H00E0FFFF&",
+      "pitch": 1.0
     },
     {
       "id": "Pria",
       "svg": "assets/characters/Pria.svg",
-      "color": "&H00FFD6AD&"
+      "color": "&H00FFD6AD&",
+      "pitch": 0.9
     },
     {
       "id": "Wanita",
       "svg": "assets/characters/Wanita.svg",
-      "color": "&H00FFC0CB&"
+      "color": "&H00FFC0CB&",
+      "pitch": 1.1
     },
     {
       "id": "AnakPria",
       "svg": "assets/characters/Anak Pria.svg",
-      "color": "&H00ADFF2F&"
+      "color": "&H00ADFF2F&",
+      "pitch": 1.2
     },
     {
       "id": "AnakWanita",
       "svg": "assets/characters/Anak Wanita.svg",
-      "color": "&H007FFF00&"
+      "color": "&H007FFF00&",
+      "pitch": 1.3
     }
   ]
 }
