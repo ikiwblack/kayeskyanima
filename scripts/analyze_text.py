@@ -42,7 +42,8 @@ def analyze(text: str, aspect_ratio: str):
             dialog_lines = lines[1:] # Dialog dimulai dari baris kedua
             
             parts = [p.strip() for p in metadata_content.split(':')]
-            scene["speaker"] = parts[0].upper()
+            # FIX: Hapus .upper() untuk mempertahankan casing yang sama persis dengan yang ada di naskah
+            scene["speaker"] = parts[0]
             if len(parts) > 1:
                 scene["emotion"] = parts[1].lower()
 
@@ -51,9 +52,11 @@ def analyze(text: str, aspect_ratio: str):
         
         # Jika speaker belum disetel dari metadata, coba tebak dari dialog (misal, NAMA: "Halo")
         if not scene["speaker"] and ':' in dialog:
-            speaker_match = re.match(r"([A-Z0-9_]+):\s*", dialog)
+            # FIX: Ubah regex agar tidak case-sensitive dan cocok dengan ID karakter
+            speaker_match = re.match(r"([a-zA-Z0-9_]+):\s*", dialog)
             if speaker_match:
-                scene["speaker"] = speaker_match.group(1).upper()
+                # FIX: Hapus .upper()
+                scene["speaker"] = speaker_match.group(1)
                 # Hapus "NAMA: " dari teks dialog yang sebenarnya
                 dialog = dialog[len(speaker_match.group(0)):].strip()
 
