@@ -1,29 +1,34 @@
-
 {
   "characters": [
     {
       "id": "Kakek",
-      "svg": "assets/kakek.svg",
-      "voice": "id-ID-Standard-B",
-      "color": "&H0000FF&"
+      "voice": "id-ID-Wavenet-B",
+      "svg": "templates/kakek.svg"
     },
     {
       "id": "Nenek",
-      "svg": "assets/nenek.svg",
-      "voice": "id-ID-Standard-A",
-      "color": "&HFF00FF&"
+      "voice": "id-ID-Wavenet-A",
+      "svg": "templates/nenek.svg"
     },
     {
       "id": "Pria",
-      "svg": "assets/pria.svg",
-      "voice": "id-ID-Standard-C",
-      "color": "&H00FFFF&"
+      "voice": "id-ID-Standard-B",
+      "svg": "templates/pria.svg"
     },
     {
       "id": "Wanita",
-      "svg": "assets/wanita.svg",
+      "voice": "id-ID-Standard-A",
+      "svg": "templates/wanita.svg"
+    },
+    {
+      "id": "AnakPria",
+      "voice": "id-ID-Standard-C",
+      "svg": "templates/anak_pria.svg"
+    },
+    {
+      "id": "AnakWanita",
       "voice": "id-ID-Standard-D",
-      "color": "&HFFFF00&"
+      "svg": "templates/anak_wanita.svg"
     }
   ]
 }
