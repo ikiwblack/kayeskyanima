@@ -20,7 +20,7 @@ from telegram.ext import (
 # Import the analyze function directly
 from scripts.analyze_text import analyze
 
-BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+BOT_TOKEN = os.environ["TELEGRAM_TOKEN"]
 
 # ===== STATE =====
 USER_STATE = {}
@@ -72,10 +72,16 @@ async def ask_for_character_type(chat_id, context, char_index, is_edit=False):
     text = f"Pilih karakter untuk *Pembicara {char_name}*:"
     keyboard = [[InlineKeyboardButton(c, callback_data=f"select_char:{c}")] for c in CHARACTERS]
     
-    if is_edit:
-        await context.bot.edit_message_text(chat_id=chat_id, message_id=context.message_id, text=text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+    # Safely get message_id
+    message_id = context.message.message_id if hasattr(context, 'message') and context.message else None
+    if is_edit and message_id:
+        try:
+            await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+        except Exception: # Fallback if message not found or not modified
+            await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
     else:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
 
 # ===== COMMAND HANDLERS =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -94,17 +100,13 @@ async def handle_script(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Naskah kosong.")
         return
 
-    USER_STATE[chat_id] = {"script": text, "step": "char_count", "chars": []}
+    USER_STATE[chat_id] = {"script": text}
+    await update.message.reply_text("Pilih orientasi video:", reply_markup=InlineKeyboardMarkup([
+        [InlineKeyboardButton("Portrait (9:16)", callback_data="orientation:9:16")],
+        [InlineKeyboardButton("Landscape (16:9)", callback_data="orientation:16:9")],
+    ]))
+    USER_STATE[chat_id]["step"] = "select_orientation"
 
-    keyboard = [[
-        InlineKeyboardButton("1", callback_data="count_char:1"),
-        InlineKeyboardButton("2", callback_data="count_char:2"),
-        InlineKeyboardButton("3", callback_data="count_char:3"),
-    ]]
-    await update.message.reply_text(
-        "Berapa banyak karakter dalam naskah ini?",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
 
 # ===== CALLBACK BUTTON =====
 async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -122,44 +124,80 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     step = state.get("step")
 
-    if data.startswith("count_char:"):
-        if step != "char_count": return
+    if data.startswith("orientation:"):
+        if step != "select_orientation": return
+
+        orientation = data.split(":")[1]
+        state["orientation"] = orientation
+        await query.edit_message_text("✅ Orientasi dipilih. Menganalisis naskah dengan AI...")
+
+        try:
+            # Try to analyze and get character count automatically
+            timeline = analyze(state["script"], state["orientation"])
+            
+            if "characters" in timeline and timeline["characters"]:
+                state["timeline"] = timeline
+                state["char_count"] = len(timeline["characters"])
+                state["chars"] = [] # Placeholder for character types
+                state["step"] = "select_char_auto"
+                
+                # Check if all character types are already in the timeline
+                all_types_present = True
+                for char in timeline["characters"]:
+                    if "type" not in char or not char["type"]:
+                        all_types_present = False
+                        break
+                
+                if all_types_present:
+                     # All good, finalize
+                    await query.delete_message()
+                    await send_timeline_preview(chat_id, context)
+                    state["step"] = "edit"
+                else:
+                    # Need to ask for character types
+                    await ask_for_character_type(chat_id, query, char_index=0, is_edit=True)
+
+            else: # If AI returns no characters, ask manually
+                raise ValueError("No characters found")
+
+        except Exception: # If analysis fails or finds no characters, ask manually
+            state["step"] = "char_count_manual"
+            keyboard = [[
+                InlineKeyboardButton("1", callback_data="count_char:1"),
+                InlineKeyboardButton("2", callback_data="count_char:2"),
+                InlineKeyboardButton("3", callback_data="count_char:3"),
+            ]]
+            await query.edit_message_text(
+                "AI tidak dapat menentukan jumlah karakter. Berapa banyak karakter dalam naskah?",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+    elif data.startswith("count_char:"):
+        if step != "char_count_manual": return
         
         count = int(data.split(":")[1])
         state["char_count"] = count
-        state["step"] = "select_char"
-        await ask_for_character_type(chat_id, query.message, char_index=0, is_edit=True)
+        state["chars"] = []
+        state["step"] = "select_char_manual"
+        await ask_for_character_type(chat_id, query, char_index=0, is_edit=True)
 
     elif data.startswith("select_char:"):
-        if step != "select_char": return
+        # This handler now works for both automatic and manual paths
+        if step not in ["select_char_auto", "select_char_manual"]: return
 
         char_type = data.split(":")[1]
         state["chars"].append(char_type)
         
         next_char_index = len(state["chars"])
         if next_char_index < state["char_count"]:
-            await ask_for_character_type(chat_id, query.message, char_index=next_char_index, is_edit=True)
+            await ask_for_character_type(chat_id, query, char_index=next_char_index, is_edit=True)
         else:
-            state["step"] = "select_orientation"
-            keyboard = [[
-                InlineKeyboardButton("Portrait (9:16)", callback_data="orientation:9:16"),
-                InlineKeyboardButton("Landscape (16:9)", callback_data="orientation:16:9"),
-            ]]
-            await query.edit_message_text(
-                "Pilih orientasi video:",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-
-    elif data.startswith("orientation:"):
-        if step != "select_orientation": return
-
-        orientation = data.split(":")[1]
-        state["orientation"] = orientation
-        await query.edit_message_text("✅ Pengaturan selesai. Menganalisis naskah...")
-
-        try:
-            timeline = analyze(state["script"], state["orientation"])
-            state["timeline"] = timeline
+            # All characters selected, now finalize timeline
+            await query.edit_message_text("✅ Pengaturan selesai. Finalisasi timeline...")
+            
+            # This was the timeline from the first analysis, or we need a new one
+            if "timeline" not in state:
+                 state["timeline"] = analyze(state["script"], state["orientation"])
 
             char_map = {}
             for i, c_type in enumerate(state["chars"]):
@@ -167,10 +205,19 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 char_map[char_id] = {"type": c_type, "voice": VOICE_MAP.get(c_type)}
             
             # Inject character types into the timeline
-            for char_data in timeline.get("characters", []):
-                char_id = char_data.get("id")
-                if char_id in char_map:
-                    char_data["type"] = char_map[char_id]["type"]
+            if "characters" not in state["timeline"]:
+                state["timeline"]["characters"] = []
+
+            for i in range(len(state["chars"])):
+                 char_id_str = chr(ord('a') + i)
+                 # Find existing char to update or create a new one
+                 existing_char = next((c for c in state["timeline"]["characters"] if c.get("id") == char_id_str), None)
+                 if existing_char:
+                     existing_char["type"] = state["chars"][i]
+                 else:
+                     # This case is a fallback, AI should have created this
+                     state["timeline"]["characters"].append({"id": char_id_str, "type": state["chars"][i], "x": 400 + i*1000})
+
 
             with open("characters.json", "w", encoding="utf-8") as f:
                 json.dump(char_map, f, indent=2)
@@ -178,10 +225,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             state["step"] = "edit"
             await query.delete_message()
             await send_timeline_preview(chat_id, context)
-
-        except Exception as e:
-            await context.bot.send_message(chat_id, f"❌ Analisis gagal: {e}")
-
+            
     elif step == "edit":
         if data.startswith("scene:"):
             state["scene_idx"] = int(data.split(":")[1]) - 1
@@ -205,7 +249,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_timeline_preview(chat_id, context)
 
         elif data == "edit:duration":
-            keyboard = [[InlineKeyboardButton(str(d), callback_data=f"duration:{d}") for d in range(3, 7)]]
+            keyboard = [[InlineKeyboardButton(str(d), callback_data=f"duration:{d}")] for d in range(3, 7)]]
             keyboard.append([InlineKeyboardButton("⬅️ Kembali", callback_data="back")])
             await query.edit_message_text("Pilih durasi (detik):", reply_markup=InlineKeyboardMarkup(keyboard))
 
