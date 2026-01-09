@@ -101,22 +101,28 @@ def render_all(timeline, output_video):
 
                 # Animasi 2: Berkedip
                 if speaker_id in blink_schedules and global_frame_index >= blink_schedules[speaker_id]:
-                    # Terapkan style berkedip selama durasi yang ditentukan
                     if global_frame_index < blink_schedules[speaker_id] + BLINK_DURATION_FRAMES:
                         modified_svg = modified_svg.replace('id="eyes"', 'id="eyes" style="transform: scaleY(0.05); transform-origin: center;"')
-                    # Setelah durasi kedipan selesai, jadwalkan kedipan berikutnya
                     else:
                         next_blink_delay = random.uniform(BLINK_INTERVAL_SECONDS * 0.5, BLINK_INTERVAL_SECONDS * 1.5) * FPS
                         blink_schedules[speaker_id] = global_frame_index + int(next_blink_delay)
 
-                # Render SVG yang sudah dimodifikasi
-                char_render_h = int(H * 0.6)
-                char_img = svg_to_pil(modified_svg, char_render_h, char_render_h) # Lebar & tinggi sama untuk svg_to_pil
+                # --- PENYESUAIAN UKURAN KARAKTER ---
+                # Ukuran lebar karakter sekarang 30% dari lebar layar agar muat lebih banyak.
+                # Aspek rasio asli (200x300) dipertahankan untuk menghindari distorsi.
+                char_render_w = int(W * 0.3)
+                char_render_h = int(char_render_w * 1.5)  # Mempertahankan rasio 2:3 (lebar*1.5 = tinggi)
+
+                # Render SVG yang sudah dimodifikasi dengan ukuran baru yang proporsional
+                char_img = svg_to_pil(modified_svg, char_render_w, char_render_h)
 
                 # Tempel karakter ke frame
-                pos_y = H - char_img.size[1] - int(H * 0.05)
+                pos_y = H - char_img.size[1] - int(H * 0.05)  # Posisi Y sedikit di atas bagian bawah
                 final_pos_x = pos_x - char_img.size[0] // 2
+
+                # Pastikan karakter tidak keluar dari layar
                 final_pos_x = max(0, min(final_pos_x, W - char_img.size[0]))
+
                 frame.paste(char_img, (final_pos_x, pos_y), char_img)
 
             pipe.stdin.write(frame.tobytes())
