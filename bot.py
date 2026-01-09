@@ -180,7 +180,6 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text(f"Edit Scene {state['scene_idx']+1}:\n\"{scene['text']}\"", reply_markup=InlineKeyboardMarkup(keyboard))
             
             elif data == "edit:emotion":
-                # Saat mengedit, kita tetap gunakan kata kunci internal
                 keyboard = [[InlineKeyboardButton(e.capitalize(), callback_data=f"emotion:{e}")] for e in AVAILABLE_EMOTIONS]
                 keyboard.append([InlineKeyboardButton("⬅️ Kembali", callback_data="back")])
                 await query.edit_message_text("Pilih emotion:", reply_markup=InlineKeyboardMarkup(keyboard))
@@ -205,8 +204,12 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif data == "render":
                 await query.edit_message_text("⏳ *Rendering video...*\nIni mungkin memakan waktu beberapa menit.", parse_mode="Markdown")
                 
+                # Simpan timeline dan naskah mentah ke file agar bisa dibaca oleh main.py
                 with open("timeline.json", "w", encoding="utf-8") as f:
                     json.dump(state["timeline"], f, indent=2, ensure_ascii=False)
+                
+                with open("script.txt", "w", encoding="utf-8") as f:
+                    f.write(state["script"])
 
                 try:
                     process = subprocess.run(
