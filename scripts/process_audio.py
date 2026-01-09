@@ -16,16 +16,13 @@ def get_audio_duration(file_path):
             return frames / float(rate)
     except wave.Error as e:
         print(f"Could not read audio duration from {file_path}: {e}")
-        return 0 # Fallback jika file rusak atau kosong
+        return 0
 
-def process_audio_and_update_timeline(timeline):
+def process_audio_and_update_timeline(timeline, character_map):
     """Membuat file audio untuk setiap adegan, menggabungkannya, dan memperbarui durasi di timeline."""
     client = texttospeech.TextToSpeechClient()
     updated_scenes = []
     scene_audio_files = []
-    
-    # Buat peta dari ID karakter ke detail karakter untuk pencarian cepat
-    character_map = {char['id']: char for char in timeline["characters"]}
 
     # Langkah 1 & 2: Buat audio per adegan & dapatkan durasi akurat
     for i, scene in enumerate(timeline["scenes"]):
@@ -33,10 +30,8 @@ def process_audio_and_update_timeline(timeline):
         text = scene.get("text", "")
 
         if not speaker_id or not text or text == "...":
-            # Jika tidak ada pembicara, tidak ada teks, atau pembicara diam, buat keheningan
             duration_sec = scene.get("duration", 0.5) # default silence duration
             scene_audio_path = os.path.join(SCENES_DIR, f"scene_{i}_silence.wav")
-            # Menggunakan pydub untuk membuat file hening (memerlukan pydub)
             from pydub import AudioSegment
             silence = AudioSegment.silent(duration=int(duration_sec * 1000))
             silence.export(scene_audio_path, format="wav")
@@ -76,20 +71,18 @@ def process_audio_and_update_timeline(timeline):
     concat_list_path = os.path.join(OUTPUT_DIR, "concat_list.txt")
     with open(concat_list_path, "w") as f:
         for file_path in scene_audio_files:
-            # Path harus relatif terhadap direktori kerja perintah ffmpeg
-            f.write(f"file '{os.path.join('scenes', os.path.basename(file_path))}'\n")
+            f.write(f"file '{os.path.join('..', file_path)}'\n")
 
     output_audio_path = os.path.join(OUTPUT_DIR, "audio.wav")
     
-    # Menjalankan ffmpeg dari direktori output untuk memastikan path relatif benar
     try:
         subprocess.run([
             "ffmpeg", "-y",
             "-f", "concat",
             "-safe", "0",
-            "-i", concat_list_path,
+            "-i", os.path.basename(concat_list_path),
             "-c", "copy",
-            output_audio_path
+            os.path.basename(output_audio_path)
         ], check=True, cwd=OUTPUT_DIR, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         print("FFmpeg Error:", e.stderr)
