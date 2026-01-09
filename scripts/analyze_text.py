@@ -34,7 +34,7 @@ def analyze(text: str, aspect_ratio: str):
         first_line = lines[0].strip()
 
         # Cek metadata [SPEAKER: emotion]
-        metadata_match = re.match(r\[(.*?)\]", first_line)
+        metadata_match = re.match(r"\[(.*?)\]", first_line)
         dialog_lines = lines
 
         if metadata_match:
