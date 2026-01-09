@@ -5,7 +5,7 @@ import google.generativeai as genai
 from scripts.cache import load_cached_timeline, save_cached_timeline
 
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-pro')
 
 PROMPT = """
 Ubah naskah menjadi timeline animasi.
