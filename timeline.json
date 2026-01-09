@@ -1,24 +1,35 @@
 {
-  "fps": 12,
+  "width": 1920,
+  "height": 1080,
+  "fps": 24,
+  "background": "assets/backgrounds/Ruang Tamu.svg",
   "characters": [
-    { "id": "a", "x": 250, "color": "&H00FFCC&" },
-    { "id": "b", "x": 650, "color": "&HFF99FF&" }
+    {
+      "id": "a",
+      "svgs": {
+        "default": "assets/characters/Pria.svg",
+        "happy": "assets/emotions/happy.svg"
+      }
+    },
+    {
+      "id": "b",
+      "svgs": {
+        "default": "assets/characters/Wanita.svg",
+        "thinking": "assets/emotions/surprised.svg"
+      }
+    }
   ],
   "scenes": [
-{
-  "speaker": "a",
-  "text": "Halo",
-  "emotion": "happy",
-  "gesture": "raise_hand",
-  "bg": "neutral",
-  "duration": 3
-},
+    {
+      "speaker": "a",
+      "text": "Halo",
+      "emotion": "happy",
+      "duration": 3
+    },
     {
       "speaker": "b",
       "text": "Dan saya karakter B.",
       "emotion": "thinking",
-      "gesture": "raise_hand",
-      "bg": "room",
       "duration": 3
     }
   ]

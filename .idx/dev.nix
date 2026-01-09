@@ -7,8 +7,18 @@
   # Use https://search.nixos.org/packages to find packages
   packages = [
     # pkgs.go
-    # pkgs.python311
-    # pkgs.python311Packages.pip
+    pkgs.python311
+    pkgs.python311Packages.pip
+    pkgs.python311Packages.python-telegram-bot
+    pkgs.python311Packages.pillow
+    pkgs.cairo  # <--- DEPENDENSI SISTEM UNTUK CAIROSVG
+    pkgs.python311Packages.cairosvg
+    pkgs.python311Packages.lxml
+    pkgs.python311Packages.numpy
+    pkgs.python311Packages.gtts
+    pkgs.python311Packages.pydub
+    pkgs.python311Packages.tqdm
+    pkgs.ffmpeg
     # pkgs.nodejs_20
     # pkgs.nodePackages.nodemon
   ];

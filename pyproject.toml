@@ -1,0 +1,17 @@
+
+[project]
+name = "kayeskyanima"
+version = "0.1.0"
+description = ""
+authors = [
+]
+dependencies = [
+    "python-telegram-bot==20.*",
+    "Pillow",
+    "cairosvg",
+    "lxml",
+    "numpy",
+    "gTTS",
+    "pydub",
+    "tqdm",
+]
