@@ -35,13 +35,10 @@ if os.path.exists("timeline.json") and MODE != "analyze":
         timeline = json.load(f)
 else:
     from scripts.analyze_text import analyze
-    # Default ke 9:16 jika tidak ada, tapi ini biasanya di-override oleh bot
-    timeline = analyze(text, '9:16') 
+    timeline = analyze(text, '9:16')
 
 # --- Atur Resolusi & Latar Belakang ---
 print("🔧 Mengatur resolusi, latar belakang, dan karakter...")
-
-# FIX: Logika orientasi diperbaiki untuk membaca nilai dari timeline
 orientation = timeline.get('orientation', '9:16')
 if orientation == '16:9':
     W, H = 1280, 720
@@ -49,18 +46,13 @@ if orientation == '16:9':
 else:
     W, H = 720, 1280
     print(f"   -> Orientasi Potret (9:16) terdeteksi. Resolusi diatur ke {W}x{H}.")
-
 timeline['width'] = W
 timeline['height'] = H
-
-# FIX: Baca dan injeksi path latar belakang ke timeline
 timeline["background"] = characters_data.get("background")
 if not timeline["background"]:
     print("   -> PERINGATAN: Tidak ada path latar belakang ditemukan di characters.json!")
 else:
     print(f"   -> Latar belakang diatur ke: {timeline['background']}")
-
-# Injeksi detail karakter
 timeline["characters"] = characters_data["characters"]
 
 # --- Mode Analisis (Hanya Bot) ---
@@ -94,10 +86,12 @@ try:
         pitch = character_pitches.get(speaker, 1.0)
         temp_wav = os.path.join(OUTPUT_DIR, f"_temp_{i}.wav")
 
-        # FIX: Peningkatan rentang pitch dengan `rubberband` untuk kualitas yang lebih baik
+        # FALLBACK: Kembali ke `asetrate` karena `rubberband` tidak tersedia.
+        # Kualitas mungkin sedikit lebih rendah, tetapi ini lebih kompatibel.
+        # gTTS menghasilkan audio pada 24kHz.
         ffmpeg_cmd = [
             "ffmpeg", "-y", "-i", temp_mp3,
-            "-filter:a", f"rubberband=pitch={pitch}",
+            "-filter:a", f"asetrate=24000*{pitch},atempo={1/pitch}",
             temp_wav
         ]
         subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
@@ -113,21 +107,22 @@ try:
         os.remove(temp_mp3)
 
     print("  - Menggabungkan semua klip audio...")
+    final_audio_path = os.path.join(OUTPUT_DIR, "audio.wav")
+    
+    # Buat daftar file untuk digabungkan
     concat_list_path = os.path.join(OUTPUT_DIR, "concat_list.txt")
     with open(concat_list_path, "w", encoding="utf-8") as f:
         for wav_file in processed_wav_files:
-            # Path harus relatif terhadap direktori CWD atau absolut
-            f.write(f"file '{os.path.join(os.getcwd(), wav_file)}'\n")
+            # Gunakan path relatif terhadap CWD dari proses ffmpeg
+            f.write(f"file '{os.path.basename(wav_file)}'\n")
     
-    final_audio_path = os.path.join(OUTPUT_DIR, "audio.wav")
     concat_cmd = [
         "ffmpeg", "-y", "-f", "concat", "-safe", "0",
-        "-i", concat_list_path, "-c", "copy", final_audio_path
+        "-i", os.path.basename(concat_list_path),
+        "-c", "copy", os.path.basename(final_audio_path)
     ]
-    # Jalankan dari direktori output untuk memastikan path file relatif benar
+    # Jalankan perintah ffmpeg dari dalam direktori output
     subprocess.run(concat_cmd, check=True, capture_output=True, cwd=OUTPUT_DIR)
-
-    print("✅ Audio dan durasi berhasil disinkronkan.")
 
 finally:
     print("  - Membersihkan file audio sementara...")
