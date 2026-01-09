@@ -1,153 +1,110 @@
-import subprocess
-import cairosvg
-from io import BytesIO
-from PIL import Image
-import wave
-import numpy as np
-from lxml import etree
 import os
+import math
+import json
+from tqdm import tqdm
+from PIL import Image
+import numpy as np
+from cairosvg import svg2png
+import subprocess
 
-from scripts.svg_emotion import apply_emotion
+# Fungsi untuk mengonversi SVG ke PNG dengan ukuran yang diinginkan
+def svg_to_pil(svg_string, width, height):
+    # Ukuran yang diinginkan bisa lebih besar untuk kualitas yang lebih baik saat penskalaan
+    png_data = svg2png(bytestring=svg_string.encode('utf-8'), output_width=width, output_height=height)
+    # Buat direktori sementara jika belum ada
+    if not os.path.exists("temp"):
+        os.makedirs("temp")
+    temp_png_path = "temp/temp_char.png"
+    with open(temp_png_path, "wb") as f:
+        f.write(png_data)
+    return Image.open(temp_png_path).convert("RGBA")
 
-# =====================
-# AUDIO ENVELOPE
-# =====================
-def load_audio_envelope(wav_path, fps):
-    """Memuat data audio dan membuat 'amplop' volume untuk animasi mulut."""
-    if not os.path.exists(wav_path):
-        print(f"Peringatan: File audio tidak ditemukan di {wav_path}. Animasi mulut akan dinonaktifkan.")
-        return []
-    
-    try:
-        with wave.open(wav_path, "rb") as wf:
-            sr = wf.getframerate()
-            n_frames = wf.getnframes()
-            audio = np.frombuffer(wf.getframes(), dtype=np.int16)
-
-        max_val = np.iinfo(np.int16).max
-        audio = audio.astype(np.float32) / max_val
-
-        samples_per_frame = int(sr / fps)
-        if samples_per_frame == 0: return []
-
-        envelope = [
-            float(np.mean(np.abs(chunk)))
-            for i in range(0, len(audio), samples_per_frame)
-            if len(chunk := audio[i:i + samples_per_frame]) > 0
-        ]
-        return envelope
-    except Exception as e:
-        print(f"Error saat memuat amplop audio: {e}")
-        return []
-
-# =====================
-# SVG -> PIL IMAGE
-# =====================
-def svg_tree_to_image(tree):
-    """FIX: Mengonversi pohon lxml SVG menjadi gambar PIL menggunakan ukuran aslinya."""
-    # Hapus parameter width/height untuk membiarkan cairosvg menggunakan ukuran intrinsik SVG
-    png_data = cairosvg.svg2png(
-        bytestring=etree.tostring(tree)
-    )
-    return Image.open(BytesIO(png_data)).convert("RGBA")
-
-# =====================
-# RENDER CORE
-# =====================
+# Fungsi untuk merender semua frame
 def render_all(timeline, output_video):
-    """Merender seluruh timeline animasi, dengan perbaikan untuk latar belakang dan penumpukan."""
-    W, H = timeline.get("width", 1080), timeline.get("height", 1920)
-    fps = timeline.get("fps", 12)
+    W, H = timeline["width"], timeline["height"]
 
-    envelope = load_audio_envelope("output/audio.wav", fps)
-    
-    # --- FIX: Muat Latar Belakang ---
+    # Muat semua SVG karakter ke dalam memori untuk efisiensi
+    char_svgs = {}
+    for char in timeline["characters"]:
+        with open(char["svg"], "r", encoding='utf-8') as f:
+            char_svgs[char["id"]] = f.read()
+
+    # FIX: Muat gambar latar belakang dari timeline
     background_img = None
-    # Coba cari path latar belakang dari karakter pertama sebagai fallback
-    if timeline.get("characters") and timeline["characters"][0].get("background"):
-        bg_path = timeline["characters"][0]["background"]
-        if os.path.exists(bg_path):
-            background_img = Image.open(bg_path).convert("RGBA").resize((W, H))
-        else:
-            print(f"Peringatan: File latar belakang '{bg_path}' tidak ditemukan.")
+    if timeline.get("background") and os.path.exists(timeline["background"]):
+        print(f"🖼️ Memuat latar belakang dari: {timeline['background']}")
+        with open(timeline["background"], "r", encoding='utf-8') as f:
+            bg_svg_string = f.read()
+        # Render latar belakang sekali dengan resolusi penuh
+        background_img = svg_to_pil(bg_svg_string, W, H)
+    else:
+        print("⚠️ Latar belakang tidak ditemukan atau tidak ditentukan. Menggunakan latar belakang hitam.")
 
-    # Jika tidak ada latar belakang, buat latar belakang hitam solid
-    if not background_img:
-        background_img = Image.new("RGBA", (W, H), (0, 0, 0, 255))
-
-    # Muat semua pohon SVG dasar sekali
-    character_svg_trees = {}
-    for char in timeline.get("characters", []):
-        svg_path = char.get("svg")
-        if not svg_path or not os.path.exists(svg_path):
-            raise FileNotFoundError(f"File SVG '{svg_path}' untuk karakter '{char.get('id')}' tidak ditemukan.")
-        character_svg_trees[char["id"]] = etree.parse(svg_path)
-
+    # Mulai proses rendering dengan FFmpeg
     command = [
-        "ffmpeg", "-y",
-        "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{W}x{H}", "-r", str(fps), "-i", "-",
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", output_video
+        'ffmpeg',
+        '-y',  # Timpa file output jika ada
+        '-f', 'rawvideo',
+        '-vcodec', 'rawvideo',
+        '-s', f'{W}x{H}',  # Ukuran frame
+        '-pix_fmt', 'rgba', # Format pixel
+        '-r', '24',  # Frame rate
+        '-i', '-',  # Input dari stdin
+        '-c:v', 'libx264',
+        '-pix_fmt', 'yuv420p',
+        '-crf', '18', # Kualitas (lower is better)
+        output_video
     ]
-    
-    ffmpeg_process = subprocess.Popen(command, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    pipe = subprocess.Popen(command, stdin=subprocess.PIPE)
 
-    frame_idx = 0
-    total_frames = sum(int(s.get("duration", 0) * fps) for s in timeline.get("scenes", []))
-    character_image_cache = {}
+    total_duration = sum(s["duration"] for s in timeline["scenes"])
+    pbar = tqdm(total=total_duration, unit="s", desc="🎥 Merender Video")
 
-    try:
-        for scene_idx, scene in enumerate(timeline.get("scenes", [])):
-            scene_frames = int(scene.get("duration", 0) * fps)
-            print(f"Merender Scene {scene_idx + 1}/{len(timeline.get('scenes', []))} ({scene_frames} frames)")
+    current_time = 0
+    for scene in timeline["scenes"]:
+        num_frames = int(scene["duration"] * 24) # 24 fps
+        if num_frames == 0:
+            continue
 
-            for _ in range(scene_frames):
-                if frame_idx >= total_frames: continue
-                
-                # --- FIX: Mulai dengan salinan gambar latar belakang ---
+        speaker_id = scene.get("speaker")
+        char_svg_string = char_svgs.get(speaker_id)
+
+        for i in range(num_frames):
+            # Buat frame dasar
+            if background_img:
                 frame = background_img.copy()
+            else:
+                frame = Image.new("RGBA", (W, H), (0, 0, 0, 255)) # Latar hitam jika tidak ada
+
+            # Jika ada pembicara di adegan ini, gambar karakternya
+            if char_svg_string:
+                # Logika animasi sederhana (gerak mulut)
+                # Buka-tutup mulut setiap 4 frame
+                is_mouth_open = (i % 8) < 4
                 
-                # Loop melalui semua karakter untuk menempatkan mereka di panggung
-                for char_in_scene in timeline["characters"]:
-                    char_id = char_in_scene["id"]
-                    
-                    is_speaking = char_id == scene.get("speaker")
-                    emotion = scene.get("emotion", "neutral") if is_speaking else "neutral"
-                    gesture = scene.get("gesture")
-                    mouth_openness = envelope[min(frame_idx, len(envelope) - 1)] if is_speaking and envelope else 0.0
-                    mouth_discrete = round(mouth_openness, 1)
+                # Modifikasi SVG untuk animasi mulut
+                if is_mouth_open:
+                    modified_svg = char_svg_string.replace('id="mouth"', 'id="mouth" style="transform: scaleY(1);"')
+                else:
+                    modified_svg = char_svg_string.replace('id="mouth"', 'id="mouth" style="transform: scaleY(0.1); transform-origin: center;"')
 
-                    cache_key = (char_id, emotion, gesture, mouth_discrete)
+                # Render karakter SVG ke gambar PIL
+                # Render dengan resolusi yang sesuai untuk mempertahankan kualitas
+                char_img = svg_to_pil(modified_svg, int(W * 0.8), int(H * 0.8)) 
 
-                    if cache_key in character_image_cache:
-                        char_img = character_image_cache[cache_key]
-                    else:
-                        base_tree = character_svg_trees[char_id]
-                        char_tree = apply_emotion(
-                            base_tree=base_tree, emotion=emotion, mouth_open=mouth_openness,
-                            frame=frame_idx, fps=fps, gesture=gesture
-                        )
-                        
-                        # --- FIX: Render SVG dengan ukuran aslinya ---
-                        char_img = svg_tree_to_image(char_tree)
-                        character_image_cache[cache_key] = char_img
+                # Tempel karakter ke tengah frame
+                char_w, char_h = char_img.size
+                pos_x = (W - char_w) // 2
+                pos_y = (H - char_h) // 2
+                frame.paste(char_img, (pos_x, pos_y), char_img) # Gunakan alpha mask dari char_img
 
-                    # --- LOGIKA PENEMPATAN YANG SEKARANG BERFUNGSI ---
-                    # Pusatkan karakter pada koordinat x-nya
-                    x_pos = char_in_scene.get("x", W // 2) - (char_img.width // 2)
-                    # Tempatkan bagian bawah karakter di bagian bawah layar (atau pada y jika ditentukan)
-                    y_pos = char_in_scene.get("y", H - char_img.height)
-                    frame.paste(char_img, (x_pos, y_pos), char_img)
+            # Tulis frame ke pipa FFmpeg
+            pipe.stdin.write(frame.tobytes())
 
-                ffmpeg_process.stdin.write(frame.tobytes())
-                frame_idx += 1
-        
-        print(f"\nSelesai menulis semua {frame_idx} frames.")
+        pbar.update(scene["duration"])
+        current_time += scene["duration"]
 
-    finally:
-        stdout_data, stderr_data = ffmpeg_process.communicate()
-        if ffmpeg_process.returncode != 0:
-            print("\n--- FFMPEG ERROR LOG ---")
-            print(stderr_data.decode('utf-8', errors='ignore'))
-            raise RuntimeError(f"FFmpeg gagal dengan kode keluar {ffmpeg_process.returncode}.")
-        else:
-            print("\nProses FFmpeg berhasil diselesaikan.")
+    pbar.close()
+    pipe.stdin.close()
+    pipe.wait()
+    print("✅ Rendering video tanpa audio selesai.")

@@ -1,10 +1,11 @@
 {
+  "background": "assets/backgrounds/Taman.svg",
   "characters": [
     {
       "id": "Kakek",
       "svg": "assets/characters/Kakek.svg",
       "color": "&H00FFFFFF&",
-      "pitch": 0.8
+      "pitch": 0.6
     },
     {
       "id": "Nenek",
@@ -16,25 +17,25 @@
       "id": "Pria",
       "svg": "assets/characters/Pria.svg",
       "color": "&H00FFD6AD&",
-      "pitch": 0.9
+      "pitch": 0.8
     },
     {
       "id": "Wanita",
       "svg": "assets/characters/Wanita.svg",
       "color": "&H00FFC0CB&",
-      "pitch": 1.1
+      "pitch": 1.2
     },
     {
       "id": "AnakPria",
       "svg": "assets/characters/Anak Pria.svg",
       "color": "&H00ADFF2F&",
-      "pitch": 1.2
+      "pitch": 1.4
     },
     {
       "id": "AnakWanita",
       "svg": "assets/characters/Anak Wanita.svg",
       "color": "&H007FFF00&",
-      "pitch": 1.3
+      "pitch": 1.5
     }
   ]
 }
