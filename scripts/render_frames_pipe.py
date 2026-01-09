@@ -1,110 +1,134 @@
 import os
-import math
 import json
+import random
+import subprocess
 from tqdm import tqdm
 from PIL import Image
-import numpy as np
 from cairosvg import svg2png
-import subprocess
 
-# Fungsi untuk mengonversi SVG ke PNG dengan ukuran yang diinginkan
+# --- Konstanta Animasi ---
+BLINK_INTERVAL_SECONDS = 3.5  # Rata-rata waktu antar kedipan
+BLINK_DURATION_FRAMES = 3   # Durasi kedipan dalam frame (sekitar 0.125 detik pada 24 fps)
+FPS = 24
+
 def svg_to_pil(svg_string, width, height):
-    # Ukuran yang diinginkan bisa lebih besar untuk kualitas yang lebih baik saat penskalaan
+    # Fungsi utilitas untuk merender SVG ke gambar PIL
     png_data = svg2png(bytestring=svg_string.encode('utf-8'), output_width=width, output_height=height)
-    # Buat direktori sementara jika belum ada
-    if not os.path.exists("temp"):
-        os.makedirs("temp")
-    temp_png_path = "temp/temp_char.png"
+    temp_dir = "temp"
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_png_path = os.path.join(temp_dir, f"temp_char_{random.randint(1,10000)}.png")
     with open(temp_png_path, "wb") as f:
         f.write(png_data)
-    return Image.open(temp_png_path).convert("RGBA")
+    img = Image.open(temp_png_path).convert("RGBA")
+    os.remove(temp_png_path) # Langsung hapus setelah dimuat
+    return img
 
-# Fungsi untuk merender semua frame
 def render_all(timeline, output_video):
     W, H = timeline["width"], timeline["height"]
 
-    # Muat semua SVG karakter ke dalam memori untuk efisiensi
-    char_svgs = {}
-    for char in timeline["characters"]:
-        with open(char["svg"], "r", encoding='utf-8') as f:
-            char_svgs[char["id"]] = f.read()
+    # 1. Muat data karakter ke dalam peta untuk akses mudah
+    char_data_map = {char["id"]: char for char in timeline["characters"]}
 
-    # FIX: Muat gambar latar belakang dari timeline
+    # 2. Render latar belakang sekali saja
     background_img = None
     if timeline.get("background") and os.path.exists(timeline["background"]):
-        print(f"🖼️ Memuat latar belakang dari: {timeline['background']}")
         with open(timeline["background"], "r", encoding='utf-8') as f:
             bg_svg_string = f.read()
-        # Render latar belakang sekali dengan resolusi penuh
         background_img = svg_to_pil(bg_svg_string, W, H)
     else:
-        print("⚠️ Latar belakang tidak ditemukan atau tidak ditentukan. Menggunakan latar belakang hitam.")
+        print("⚠️ Latar belakang tidak ditemukan. Menggunakan latar belakang hitam.")
 
-    # Mulai proses rendering dengan FFmpeg
+    # Setup FFmpeg pipe
     command = [
-        'ffmpeg',
-        '-y',  # Timpa file output jika ada
-        '-f', 'rawvideo',
-        '-vcodec', 'rawvideo',
-        '-s', f'{W}x{H}',  # Ukuran frame
-        '-pix_fmt', 'rgba', # Format pixel
-        '-r', '24',  # Frame rate
-        '-i', '-',  # Input dari stdin
-        '-c:v', 'libx264',
-        '-pix_fmt', 'yuv420p',
-        '-crf', '18', # Kualitas (lower is better)
-        output_video
+        'ffmpeg', '-y', '-f', 'rawvideo', '-vcodec', 'rawvideo',
+        '-s', f'{W}x{H}', '-pix_fmt', 'rgba', '-r', str(FPS), '-i', '-',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '18', output_video
     ]
     pipe = subprocess.Popen(command, stdin=subprocess.PIPE)
 
-    total_duration = sum(s["duration"] for s in timeline["scenes"])
+    # --- Inisialisasi State Animasi ---
+    total_duration = sum(s.get("duration", 0) for s in timeline["scenes"])
     pbar = tqdm(total=total_duration, unit="s", desc="🎥 Merender Video")
+    
+    last_positions = {}
+    blink_schedules = {} # Jadwal kedipan untuk setiap karakter
+    global_frame_index = 0
 
-    current_time = 0
     for scene in timeline["scenes"]:
-        num_frames = int(scene["duration"] * 24) # 24 fps
+        num_frames = int(scene["duration"] * FPS)
         if num_frames == 0:
             continue
 
         speaker_id = scene.get("speaker")
-        char_svg_string = char_svgs.get(speaker_id)
-
-        for i in range(num_frames):
-            # Buat frame dasar
-            if background_img:
-                frame = background_img.copy()
+        char_data = char_data_map.get(speaker_id)
+        
+        # --- Logika Pemilihan SVG Berdasarkan Emosi ---
+        char_svg_string = None
+        if char_data:
+            emotion = scene.get("emotion", "neutral")
+            svg_paths = char_data.get("svgs", {})
+            svg_path = svg_paths.get(emotion, svg_paths.get("default"))
+            if svg_path and os.path.exists(svg_path):
+                with open(svg_path, "r", encoding='utf-8') as f:
+                    char_svg_string = f.read()
             else:
-                frame = Image.new("RGBA", (W, H), (0, 0, 0, 255)) # Latar hitam jika tidak ada
+                print(f"⚠️ SVG untuk {speaker_id} (emosi: {emotion}) tidak ditemukan di '{svg_path}'")
 
-            # Jika ada pembicara di adegan ini, gambar karakternya
+        # --- Atur Posisi Karakter ---
+        if speaker_id and speaker_id not in last_positions:
+            pos_x_random = int(W * random.uniform(0.15, 0.85))
+            last_positions[speaker_id] = pos_x_random
+        pos_x = last_positions.get(speaker_id, W // 2)
+
+        # --- Atur Jadwal Kedipan ---
+        if speaker_id and speaker_id not in blink_schedules:
+            first_blink_delay = random.uniform(0.5, BLINK_INTERVAL_SECONDS) * FPS
+            blink_schedules[speaker_id] = global_frame_index + int(first_blink_delay)
+
+        # --- Loop Per Frame untuk Adegan Ini ---
+        for i in range(num_frames):
+            frame = background_img.copy() if background_img else Image.new("RGBA", (W, H), (0, 0, 0, 255))
+
             if char_svg_string:
-                # Logika animasi sederhana (gerak mulut)
-                # Buka-tutup mulut setiap 4 frame
+                modified_svg = char_svg_string
+
+                # Animasi 1: Gerak Mulut
                 is_mouth_open = (i % 8) < 4
-                
-                # Modifikasi SVG untuk animasi mulut
                 if is_mouth_open:
-                    modified_svg = char_svg_string.replace('id="mouth"', 'id="mouth" style="transform: scaleY(1);"')
+                    modified_svg = modified_svg.replace('id="mouth"', 'id="mouth" style="transform: scaleY(1);"')
                 else:
-                    modified_svg = char_svg_string.replace('id="mouth"', 'id="mouth" style="transform: scaleY(0.1); transform-origin: center;"')
+                    modified_svg = modified_svg.replace('id="mouth"', 'id="mouth" style="transform: scaleY(0.1); transform-origin: center;"')
 
-                # Render karakter SVG ke gambar PIL
-                # Render dengan resolusi yang sesuai untuk mempertahankan kualitas
-                char_img = svg_to_pil(modified_svg, int(W * 0.8), int(H * 0.8)) 
+                # Animasi 2: Berkedip
+                if speaker_id in blink_schedules and global_frame_index >= blink_schedules[speaker_id]:
+                    # Terapkan style berkedip selama durasi yang ditentukan
+                    if global_frame_index < blink_schedules[speaker_id] + BLINK_DURATION_FRAMES:
+                        modified_svg = modified_svg.replace('id="eyes"', 'id="eyes" style="transform: scaleY(0.05); transform-origin: center;"')
+                    # Setelah durasi kedipan selesai, jadwalkan kedipan berikutnya
+                    else:
+                        next_blink_delay = random.uniform(BLINK_INTERVAL_SECONDS * 0.5, BLINK_INTERVAL_SECONDS * 1.5) * FPS
+                        blink_schedules[speaker_id] = global_frame_index + int(next_blink_delay)
 
-                # Tempel karakter ke tengah frame
-                char_w, char_h = char_img.size
-                pos_x = (W - char_w) // 2
-                pos_y = (H - char_h) // 2
-                frame.paste(char_img, (pos_x, pos_y), char_img) # Gunakan alpha mask dari char_img
+                # Render SVG yang sudah dimodifikasi
+                char_render_h = int(H * 0.6)
+                char_img = svg_to_pil(modified_svg, char_render_h, char_render_h) # Lebar & tinggi sama untuk svg_to_pil
 
-            # Tulis frame ke pipa FFmpeg
+                # Tempel karakter ke frame
+                pos_y = H - char_img.size[1] - int(H * 0.05)
+                final_pos_x = pos_x - char_img.size[0] // 2
+                final_pos_x = max(0, min(final_pos_x, W - char_img.size[0]))
+                frame.paste(char_img, (final_pos_x, pos_y), char_img)
+
             pipe.stdin.write(frame.tobytes())
+            global_frame_index += 1
 
         pbar.update(scene["duration"])
-        current_time += scene["duration"]
 
+    # --- Finalisasi ---
     pbar.close()
     pipe.stdin.close()
     pipe.wait()
+    if os.path.exists("temp"):
+        import shutil
+        shutil.rmtree("temp")
     print("✅ Rendering video tanpa audio selesai.")

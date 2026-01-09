@@ -1,32 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-
-  <rect id="body" x="216" y="260" width="80" height="140" rx="20" fill="#6C63FF"/>
-
-  <g id="head_group">
-    <circle id="head" cx="256" cy="180" r="60" fill="#FFD6A5"/>
-    <path d="M220 140 Q256 120 292 140" stroke="#BDBDBD" stroke-width="10" fill="none"/>
-
-    <g id="eyes_open">
-      <circle cx="236" cy="170" r="10" stroke="#000" stroke-width="2" fill="none"/>
-      <circle cx="276" cy="170" r="10" stroke="#000" stroke-width="2" fill="none"/>
-      <path d="M246 170 H 266" stroke="#000" stroke-width="2"/>
-      <circle id="eye_left_open" cx="236" cy="170" r="4" fill="#000"/>
-      <circle id="eye_right_open" cx="276" cy="170" r="4" fill="#000"/>
+<svg width="200" height="300" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="8" stdDeviation="5" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <g id="ghost-character" transform="translate(0, 0)">
+    <g id="body" style="transform-origin: bottom;" filter="url(#shadow)">
+      <path d="M 30,280 C 10,240 10,150 40,80 C 70,10 130,10 160,80 C 190,150 190,240 170,280 L 150,265 L 130,280 L 110,265 L 90,280 L 70,265 L 50,280 Z" fill="#D8BFD8" stroke="#6B7280" stroke-width="3"/>
     </g>
-
-    <g id="eyes_closed" display="none">
-      <path id="eye_left_closed" d="M226 170 Q236 175 246 170" stroke="#000" stroke-width="3" fill="none"/>
-      <path id="eye_right_closed" d="M266 170 Q276 175 286 170" stroke="#000" stroke-width="3" fill="none"/>
+    <g id="eyes" style="transform-origin: center;">
+      <!-- Mata Kiri dengan Bulu Mata -->
+      <g id="left-eye" transform="translate(60, 120)">
+        <ellipse cx="0" cy="0" rx="18" ry="22" fill="white"/>
+        <ellipse cx="0" cy="0" rx="15" ry="19" fill="white" stroke="#64748B" stroke-width="2"/>
+        <path d="M -15,-15 Q 0,-25 15,-15" stroke="#4B5563" stroke-width="1.5" fill="none"/>
+        <circle cx="2" cy="3" r="8" fill="#1E293B"/>
+        <circle cx="0" cy="0" r="3" fill="white"/>
+      </g>
+      <!-- Mata Kanan dengan Bulu Mata -->
+      <g id="right-eye" transform="translate(140, 120)">
+        <ellipse cx="0" cy="0" rx="18" ry="22" fill="white"/>
+        <ellipse cx="0" cy="0" rx="15" ry="19" fill="white" stroke="#64748B" stroke-width="2"/>
+        <path d="M -15,-15 Q 0,-25 15,-15" stroke="#4B5563" stroke-width="1.5" fill="none"/>
+        <circle cx="-2" cy="3" r="8" fill="#1E293B"/>
+        <circle cx="-4" cy="0" r="3" fill="white"/>
+      </g>
     </g>
-
-    <path id="mouth" d="M236 200 Q256 210 276 200"
-          stroke="#000" stroke-width="4" fill="none"/>
-
-    <path d="M220 220 Q230 225 240 220" stroke="#000" stroke-width="2" fill="none"/>
-    <path d="M270 220 Q280 225 290 220" stroke="#000" stroke-width="2" fill="none"/>
+    <g id="mouth-group" transform="translate(100, 190)">
+       <path id="mouth" d="M -25,0 C -10,15 10,15 25,0 C 20,-5 -20,-5 -25,0 Z" fill="#475569" style="transform-origin: center;"/>
+    </g>
   </g>
-
-  <rect id="arm_left" x="180" y="270" width="30" height="90" rx="15" fill="#FFD6A5"/>
-  <rect id="arm_right" x="302" y="270" width="30" height="90" rx="15" fill="#FFD6A5"/>
-
 </svg>

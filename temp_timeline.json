@@ -1,0 +1,12 @@
+{
+    "scenes": [
+        {
+            "text": "Halo, ini adalah tes pertama.",
+            "emotion": "happy"
+        },
+        {
+            "text": "Dan ini adalah tes kedua, untuk memastikan semuanya berjalan lancar.",
+            "emotion": "neutral"
+        }
+    ]
+}

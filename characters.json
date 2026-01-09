@@ -3,39 +3,51 @@
   "characters": [
     {
       "id": "Kakek",
-      "svg": "assets/characters/Kakek.svg",
       "color": "&H00FFFFFF&",
-      "pitch": 0.6
+      "pitch": 0.6,
+      "svgs": {
+        "default": "assets/characters/Kakek.svg"
+      }
     },
     {
       "id": "Nenek",
-      "svg": "assets/characters/Nenek.svg",
       "color": "&H00E0FFFF&",
-      "pitch": 1.0
+      "pitch": 1.0,
+      "svgs": {
+        "default": "assets/characters/Nenek.svg"
+      }
     },
     {
       "id": "Pria",
-      "svg": "assets/characters/Pria.svg",
       "color": "&H00FFD6AD&",
-      "pitch": 0.8
+      "pitch": 0.8,
+      "svgs": {
+        "default": "assets/characters/Pria.svg"
+      }
     },
     {
       "id": "Wanita",
-      "svg": "assets/characters/Wanita.svg",
       "color": "&H00FFC0CB&",
-      "pitch": 1.2
+      "pitch": 1.2,
+      "svgs": {
+        "default": "assets/characters/Wanita.svg"
+      }
     },
     {
       "id": "AnakPria",
-      "svg": "assets/characters/Anak Pria.svg",
       "color": "&H00ADFF2F&",
-      "pitch": 1.4
+      "pitch": 1.4,
+      "svgs": {
+        "default": "assets/characters/Anak Pria.svg"
+      }
     },
     {
       "id": "AnakWanita",
-      "svg": "assets/characters/Anak Wanita.svg",
       "color": "&H007FFF00&",
-      "pitch": 1.5
+      "pitch": 1.5,
+      "svgs": {
+        "default": "assets/characters/Anak Wanita.svg"
+      }
     }
   ]
 }
