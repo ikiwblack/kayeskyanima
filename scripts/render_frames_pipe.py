@@ -56,19 +56,16 @@ def svg_tree_to_image(tree, width, height):
 # RENDER CORE
 # =====================
 def render_all(timeline, output_video):
-    """Merender seluruh timeline animasi menjadi file video TANPA AUDIO."""
+    """Merender seluruh timeline animasi, menangkap error dari FFmpeg."""
     W, H = timeline.get("width", 1080), timeline.get("height", 1920)
     fps = timeline.get("fps", 12)
 
-    # Memuat amplop audio untuk animasi mulut (tetap diperlukan)
     envelope = load_audio_envelope("output/audio.wav", fps)
-
-    # Memuat semua pohon SVG karakter ke dalam memori
+    
     character_svg_trees = {}
     for char in timeline.get("characters", []):
         svg_path = char.get("svg")
         if not svg_path or not os.path.exists(svg_path):
-            # Coba path alternatif jika path di characters.json salah
             alt_path = os.path.join("assets", "characters", os.path.basename(svg_path))
             if os.path.exists(alt_path):
                 svg_path = alt_path
@@ -76,53 +73,84 @@ def render_all(timeline, output_video):
                 raise FileNotFoundError(f"File SVG '{svg_path}' untuk karakter '{char.get('id')}' tidak ditemukan.")
         character_svg_trees[char["id"]] = etree.parse(svg_path)
 
-    # Menyiapkan proses FFmpeg HANYA UNTUK VIDEO
-    ffmpeg_process = subprocess.Popen([
+    command = [
         "ffmpeg", "-y",
-        "-f", "rawvideo", "-pix_fmt", "rgba",
+        "-f", "rawvideo",
+        "-pix_fmt", "rgba",
         "-s", f"{W}x{H}",
         "-r", str(fps),
-        "-i", "-",  # Membaca frame dari stdin
+        "-i", "-",
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
-        output_video # Ini akan menjadi video_noaudio.mp4
-    ], stdin=subprocess.PIPE)
+        output_video
+    ]
+    
+    print(f"Starting FFmpeg with command: {' '.join(command)}")
+    
+    ffmpeg_process = subprocess.Popen(command, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    total_frames = sum(int(s.get("duration", 0) * fps) for s in timeline.get("scenes", []))
     frame_idx = 0
+    total_frames = sum(int(s.get("duration", 0) * fps) for s in timeline.get("scenes", []))
 
-    for scene in timeline.get("scenes", []):
-        scene_frames = int(scene.get("duration", 0) * fps)
-
-        for _ in range(scene_frames):
-            if frame_idx >= total_frames: continue
-
-            frame = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-
-            for char_in_scene in timeline["characters"]:
-                char_id = char_in_scene["id"]
-                base_tree = character_svg_trees[char_id]
-
-                is_speaking = char_id == scene.get("speaker")
-                mouth_openness = envelope[min(frame_idx, len(envelope) - 1)] if is_speaking and envelope else 0.0
-
-                char_tree = apply_emotion(
-                    base_tree=base_tree,
-                    emotion=scene.get("emotion", "neutral"),
-                    mouth_open=mouth_openness,
-                    frame=frame_idx, fps=fps,
-                    gesture=scene.get("gesture")
-                )
+    try:
+        for scene in timeline.get("scenes", []):
+            scene_frames = int(scene.get("duration", 0) * fps)
+            for _ in range(scene_frames):
+                if frame_idx >= total_frames: continue
                 
-                char_img = svg_tree_to_image(char_tree, W, H)
-
-                x_pos = char_in_scene.get("x", 0) - (char_img.width // 2)
-                y_pos = H - char_img.height
+                frame = Image.new("RGBA", (W, H), (0, 0, 0, 0))
                 
-                frame.paste(char_img, (x_pos, y_pos), char_img)
+                for char_in_scene in timeline["characters"]:
+                    char_id = char_in_scene["id"]
+                    base_tree = character_svg_trees[char_id]
+                    
+                    is_speaking = char_id == scene.get("speaker")
+                    mouth_openness = envelope[min(frame_idx, len(envelope) - 1)] if is_speaking and envelope else 0.0
+                    
+                    char_tree = apply_emotion(
+                        base_tree=base_tree,
+                        emotion=scene.get("emotion", "neutral"),
+                        mouth_open=mouth_openness,
+                        frame=frame_idx,
+                        fps=fps,
+                        gesture=scene.get("gesture")
+                    )
+                    
+                    char_img = svg_tree_to_image(char_tree, W, H)
+                    
+                    x_pos = char_in_scene.get("x", 0) - (char_img.width // 2)
+                    y_pos = H - char_img.height
+                    
+                    frame.paste(char_img, (x_pos, y_pos), char_img)
 
-            ffmpeg_process.stdin.write(frame.tobytes())
-            frame_idx += 1
+                ffmpeg_process.stdin.write(frame.tobytes())
+                frame_idx += 1
+        
+        ffmpeg_process.stdin.close()
 
-    ffmpeg_process.stdin.close()
-    ffmpeg_process.wait()
+    except BrokenPipeError:
+        print("
+!!! BrokenPipeError: FFmpeg process terminated unexpectedly. !!!")
+        print("This usually means ffmpeg encountered an error and closed the stream.")
+        pass
+    
+    except Exception as e:
+        print(f"
+!!! An unexpected error occurred during frame writing: {e} !!!")
+        raise
+
+    finally:
+        stdout_data, stderr_data = ffmpeg_process.communicate()
+        
+        if ffmpeg_process.returncode != 0:
+            print("
+--- FFMPEG ERROR LOG (return code was not 0) ---")
+            if stderr_data:
+                print(stderr_data.decode('utf-8', errors='ignore'))
+            else:
+                print("FFmpeg exited with an error, but stderr was empty.")
+            print("--------------------------------------------------")
+            raise RuntimeError(f"FFmpeg failed with exit code {ffmpeg_process.returncode}. See log above for details.")
+        else:
+            print("
+FFmpeg process completed successfully.")
