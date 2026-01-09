@@ -1,102 +1,82 @@
 import os
 import json
 import re
-import google.generativeai as genai
 from scripts.cache import load_cached_timeline, save_cached_timeline
 
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-pro')
 
-PROMPT = """
-Ubah naskah menjadi timeline animasi.
+def load_character_definitions():
+    """Memuat definisi karakter dari characters.json."""
+    try:
+        with open('characters.json', 'r', encoding='utf-8') as f:
+            return json.load(f)["characters"]
+    except FileNotFoundError:
+        raise ValueError("File characters.json tidak ditemukan. Harap buat file konfigurasi karakter.")
+    except json.JSONDecodeError:
+        raise ValueError("File characters.json tidak valid.")
 
-ATURAN:
-- Output HARUS JSON valid.
-- Dimensi video adalah <<<WIDTH>>>x<<<HEIGHT>>>. Sesuaikan posisi horizontal karakter (`x`) agar sesuai dengan lebar ini.
-- Maksimal 10 scene.
-- Emotion hanya: neutral, sad, happy, thinking, angry, surprised.
-- Gesture (opsional) hanya: raise_hand, walk.
-- Durasi 3–6 detik.
-- Untuk setiap karakter, pilih warna dari daftar di bawah ini.
+def parse_script(text: str, all_chars_map: dict) -> (list, list):
+    """Menganalisis naskah untuk menemukan karakter yang aktif dan membuat adegan dasar."""
+    active_char_ids = set()
+    scenes = []
+    for line in text.strip().split('\n'):
+        match = re.match(r'^(.*?):\s*(.*)$', line)
+        if not match:
+            continue
+        
+        speaker_id, dialog = match.groups()
+        if speaker_id in all_chars_map:
+            active_char_ids.add(speaker_id)
+            # Menambahkan nilai default untuk emotion dan duration secara langsung
+            scenes.append({
+                "speaker": speaker_id, 
+                "text": dialog.strip(),
+                "emotion": "neutral", # Emosi default
+                "duration": 3 # Durasi placeholder, akan di-override oleh process_audio
+            })
 
-WARNA:
-- &H00FFFF& (Cyan)
-- &HFF00FF& (Magenta)
-- &HFFFF00& (Yellow)
-- &H00FF00& (Green)
-- &HFF0000& (Red)
-- &H0000FF& (Blue)
+    if not active_char_ids:
+        raise ValueError("Tidak ada karakter yang valid ditemukan dalam naskah. Pastikan formatnya 'Karakter: dialog'.")
 
-WAJIB FORMAT:
-{
-  "width": <<<WIDTH>>>,
-  "height": <<<HEIGHT>>>,
-  "fps": 12,
-  "characters": [
-    { "id": "a", "x": 400, "color": "&H00FFFF&" },
-    { "id": "b", "x": 1400, "color": "&HFF00FF&" }
-  ],
-  "scenes": [
-    {
-      "speaker": "a",
-      "text": "...",
-      "emotion": "happy",
-      "bg": "neutral",
-      "duration": 4,
-      "gesture": "walk"
-    }
-  ]
-}
+    active_characters = [char for char_id, char in all_chars_map.items() if char_id in active_char_ids]
+    return active_characters, scenes
 
-NASKAH:
-<<<TEXT>>>
-"""
-
-def extract_json(text: str) -> dict:
-    text = text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    if text.endswith("```"):
-        text = text[:-3]
-
-    match = re.search(r"\{[\s\S]*\}", text)
-    if not match:
-        raise ValueError("Gemini tidak mengembalikan JSON yang valid")
-    return json.loads(match.group())
+def assign_positions(characters: list, width: int) -> list:
+    """Menetapkan posisi 'x' untuk setiap karakter secara merata."""
+    num_chars = len(characters)
+    for i, char in enumerate(characters):
+        # Menetapkan posisi x di tengah berdasarkan jumlah karakter
+        char['x'] = int(width * (i + 1) / (num_chars + 1))
+    return characters
 
 def analyze(text: str, orientation: str = "9:16") -> dict:
-    """Menganalisis naskah dan mengembalikan timeline dictionary berdasarkan orientasi."""
-    cache_key = f"orientation={orientation}::{text}"
+    """Menganalisis naskah dengan arsitektur berbasis aturan 100% deterministik."""
+    # Kunci cache diubah untuk mencerminkan versi logika baru ini
+    cache_key = f"deterministic_v3::{orientation}::{text}"
     cached = load_cached_timeline(cache_key)
     if cached:
         return cached
 
-    if orientation == "16:9":
-        width, height = 1920, 1080
-    else:  # Default ke 9:16
-        width, height = 1080, 1920
+    # Tentukan dimensi
+    width, height = (1920, 1080) if orientation == "16:9" else (1080, 1920)
 
-    prompt = PROMPT.replace("<<<TEXT>>>", text)
-    prompt = prompt.replace("<<<WIDTH>>>", str(width))
-    prompt = prompt.replace("<<<HEIGHT>>>", str(height))
+    # 1. Muat semua definisi karakter
+    all_character_defs = load_character_definitions()
+    all_chars_map = {char['id']: char for char in all_character_defs}
 
-    response = model.generate_content(prompt)
+    # 2. Parse naskah untuk membuat adegan yang sudah diperkaya dengan nilai default
+    active_characters, scenes = parse_script(text, all_chars_map)
 
-    try:
-        raw_text = response.text
-        timeline = extract_json(raw_text)
+    # 3. Tetapkan posisi horizontal untuk karakter aktif
+    positioned_characters = assign_positions(active_characters, width)
 
-        if "characters" in timeline:
-            colors = ["&H00FFFF&", "&HFF00FF&", "&HFFFF00&", "&H00FF00&", "&HFF0000&", "&H0000FF&"]
-            for i, char in enumerate(timeline["characters"]):
-                if "color" not in char or not char["color"]:
-                    char["color"] = colors[i % len(colors)]
-        
-        # Fallback untuk memastikan dimensi ada di output
-        timeline.setdefault("width", width)
-        timeline.setdefault("height", height)
+    # 4. Bangun timeline final (tidak ada lagi langkah AI)
+    timeline = {
+        "width": width,
+        "height": height,
+        "fps": 12,
+        "characters": positioned_characters,
+        "scenes": scenes
+    }
 
-        save_cached_timeline(cache_key, timeline)
-        return timeline
-    except (ValueError, AttributeError) as e:
-        raise ValueError(f"Gagal memproses response dari Gemini: {e}") from e
+    save_cached_timeline(cache_key, timeline)
+    return timeline

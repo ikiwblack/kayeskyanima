@@ -1,0 +1,29 @@
+
+{
+  "characters": [
+    {
+      "id": "Kakek",
+      "svg": "assets/kakek.svg",
+      "voice": "id-ID-Standard-B",
+      "color": "&H0000FF&"
+    },
+    {
+      "id": "Nenek",
+      "svg": "assets/nenek.svg",
+      "voice": "id-ID-Standard-A",
+      "color": "&HFF00FF&"
+    },
+    {
+      "id": "Pria",
+      "svg": "assets/pria.svg",
+      "voice": "id-ID-Standard-C",
+      "color": "&H00FFFF&"
+    },
+    {
+      "id": "Wanita",
+      "svg": "assets/wanita.svg",
+      "voice": "id-ID-Standard-D",
+      "color": "&HFFFF00&"
+    }
+  ]
+}
