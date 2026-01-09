@@ -77,7 +77,7 @@ def process_audio_and_update_timeline(timeline):
     with open(concat_list_path, "w") as f:
         for file_path in scene_audio_files:
             # Path harus relatif terhadap direktori kerja perintah ffmpeg
-            f.write(f"file '{os.path.join("scenes", os.path.basename(file_path))}'\n")
+            f.write(f"file '{os.path.join('scenes', os.path.basename(file_path))}'\n")
 
     output_audio_path = os.path.join(OUTPUT_DIR, "audio.wav")
     
