@@ -249,7 +249,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_timeline_preview(chat_id, context)
 
         elif data == "edit:duration":
-            keyboard = [[InlineKeyboardButton(str(d), callback_data=f"duration:{d}")] for d in range(3, 7)]]
+            keyboard = [[InlineKeyboardButton(str(d), callback_data=f"duration:{d}") for d in range(3, 7)]]
             keyboard.append([InlineKeyboardButton("⬅️ Kembali", callback_data="back")])
             await query.edit_message_text("Pilih durasi (detik):", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -277,7 +277,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             try:
                 subprocess.run(["python", "main.py", "render"], check=True, capture_output=True, text=True)
-                await context.bot.send_video(chat_id=chat_id, video=open("output/video.mp4", "rb"), caption="✅ Video selesai")
+                await context.bot.send_video(chat_id=chdat_id, video=open("output/video.mp4", "rb"), caption="✅ Video selesai")
                 USER_STATE.pop(chat_id, None)
             except subprocess.CalledProcessError as e:
                 await context.bot.send_message(chat_id, f"❌ Render gagal:\n{e.stderr}")
