@@ -53,15 +53,16 @@ def svg_tree_to_image(tree, width, height):
     return Image.open(BytesIO(png_data)).convert("RGBA")
 
 # =====================
-# RENDER CORE
+# RENDER CORE (WITH CACHING)
 # =====================
 def render_all(timeline, output_video):
-    """Merender seluruh timeline animasi, menangkap error dari FFmpeg."""
+    """Merender seluruh timeline animasi, dengan caching untuk gambar karakter."""
     W, H = timeline.get("width", 720), timeline.get("height", 1280)
     fps = timeline.get("fps", 12)
 
     envelope = load_audio_envelope("output/audio.wav", fps)
     
+    # Muat semua pohon SVG dasar sekali
     character_svg_trees = {}
     for char in timeline.get("characters", []):
         svg_path = char.get("svg")
@@ -75,57 +76,81 @@ def render_all(timeline, output_video):
 
     command = [
         "ffmpeg", "-y",
-        "-f", "rawvideo",
-        "-pix_fmt", "rgba",
-        "-s", f"{W}x{H}",
-        "-r", str(fps),
-        "-i", "-",
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        output_video
+        "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{W}x{H}", "-r", str(fps), "-i", "-",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", output_video
     ]
     
     print(f"Starting FFmpeg with command: {' '.join(command)}")
-    
     ffmpeg_process = subprocess.Popen(command, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
 
     frame_idx = 0
     total_frames = sum(int(s.get("duration", 0) * fps) for s in timeline.get("scenes", []))
+    
+    # Inisialisasi cache untuk gambar karakter yang sudah dirender
+    character_image_cache = {}
 
     try:
-        for scene in timeline.get("scenes", []):
+        for scene_idx, scene in enumerate(timeline.get("scenes", [])):
             scene_frames = int(scene.get("duration", 0) * fps)
+            print(f"Rendering Scene {scene_idx + 1}/{len(timeline.get('scenes', []))} ({scene_frames} frames)")
+
             for _ in range(scene_frames):
                 if frame_idx >= total_frames: continue
                 
+                # Buat frame kosong
                 frame = Image.new("RGBA", (W, H), (0, 0, 0, 0))
                 
+                # Loop melalui semua karakter yang ADA dalam timeline (bukan hanya yang di scene)
                 for char_in_scene in timeline["characters"]:
                     char_id = char_in_scene["id"]
-                    base_tree = character_svg_trees[char_id]
                     
+                    # Tentukan status karakter untuk frame ini
                     is_speaking = char_id == scene.get("speaker")
+                    emotion = scene.get("emotion", "neutral")
+                    gesture = scene.get("gesture")
                     mouth_openness = envelope[min(frame_idx, len(envelope) - 1)] if is_speaking and envelope else 0.0
                     
-                    char_tree = apply_emotion(
-                        base_tree=base_tree,
-                        emotion=scene.get("emotion", "neutral"),
-                        mouth_open=mouth_openness,
-                        frame=frame_idx,
-                        fps=fps,
-                        gesture=scene.get("gesture")
-                    )
-                    
-                    char_img = svg_tree_to_image(char_tree, W, H)
-                    
+                    # Discretize mouth openness to improve caching
+                    # Round to nearest 0.1, for example. Adjust if needed.
+                    mouth_discrete = round(mouth_openness, 1)
+
+                    # Buat kunci cache berdasarkan status visual karakter
+                    cache_key = (char_id, emotion, gesture, mouth_discrete)
+
+                    # --- LOGIKA CACHING ---
+                    if cache_key in character_image_cache:
+                        # Cache Hit: Gunakan gambar yang sudah ada
+                        char_img = character_image_cache[cache_key]
+                    else:
+                        # Cache Miss: Render gambar baru dan simpan di cache
+                        base_tree = character_svg_trees[char_id]
+                        
+                        char_tree = apply_emotion(
+                            base_tree=base_tree,
+                            emotion=emotion,
+                            mouth_open=mouth_openness, # Gunakan nilai asli untuk render
+                            frame=frame_idx, 
+                            fps=fps,
+                            gesture=gesture
+                        )
+                        
+                        # Render SVG ke gambar PIL
+                        char_img = svg_tree_to_image(char_tree, W, H)
+                        # Simpan di cache
+                        character_image_cache[cache_key] = char_img
+
+                    # Tempel gambar karakter ke frame
                     x_pos = char_in_scene.get("x", 0) - (char_img.width // 2)
                     y_pos = H - char_img.height
-                    
                     frame.paste(char_img, (x_pos, y_pos), char_img)
 
+                # Kirim frame ke FFmpeg
                 ffmpeg_process.stdin.write(frame.tobytes())
                 frame_idx += 1
         
+        print(f"\nFinished writing all {frame_idx} frames.")
+        print(f"Cache Summary: Created {len(character_image_cache)} unique character images.")
+
     except BrokenPipeError:
         print("\n!!! BrokenPipeError: FFmpeg process terminated unexpectedly. !!!")
         print("This usually means ffmpeg encountered an error and closed the stream.")
@@ -136,8 +161,6 @@ def render_all(timeline, output_video):
         raise
 
     finally:
-        # communicate() sends remaining data, waits for process to terminate,
-        # and reads stdout/stderr. It also handles closing the pipes.
         stdout_data, stderr_data = ffmpeg_process.communicate()
         
         if ffmpeg_process.returncode != 0:
