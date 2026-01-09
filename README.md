@@ -10,7 +10,7 @@ CPU-only pipeline to convert narration text into simple 2D animation video.
 - Suitable for personal use
 
 ## Flow
-Text → LLM → timeline.json → frames → video → audio → final video
+Text (via Bot) → Timeline Analysis → Audio Generation (gTTS) → Frame Rendering → Subtitle Generation → Final Video (FFmpeg)
 
 ## Requirements
 - Python 3.9+
