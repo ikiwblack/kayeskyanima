@@ -22,7 +22,7 @@ def load_audio_envelope(wav_path, fps):
         with wave.open(wav_path, "rb") as wf:
             sr = wf.getframerate()
             n_frames = wf.getnframes()
-            audio = np.frombuffer(wf.readframes(n_frames), dtype=np.int16)
+            audio = np.frombuffer(wf.getframes(), dtype=np.int16)
 
         max_val = np.iinfo(np.int16).max
         audio = audio.astype(np.float32) / max_val
@@ -57,7 +57,7 @@ def svg_tree_to_image(tree, width, height):
 # =====================
 def render_all(timeline, output_video):
     """Merender seluruh timeline animasi, menangkap error dari FFmpeg."""
-    W, H = timeline.get("width", 1080), timeline.get("height", 1920)
+    W, H = timeline.get("width", 720), timeline.get("height", 1280)
     fps = timeline.get("fps", 12)
 
     envelope = load_audio_envelope("output/audio.wav", fps)
@@ -126,8 +126,6 @@ def render_all(timeline, output_video):
                 ffmpeg_process.stdin.write(frame.tobytes())
                 frame_idx += 1
         
-        ffmpeg_process.stdin.close()
-
     except BrokenPipeError:
         print("\n!!! BrokenPipeError: FFmpeg process terminated unexpectedly. !!!")
         print("This usually means ffmpeg encountered an error and closed the stream.")
@@ -138,6 +136,8 @@ def render_all(timeline, output_video):
         raise
 
     finally:
+        # communicate() sends remaining data, waits for process to terminate,
+        # and reads stdout/stderr. It also handles closing the pipes.
         stdout_data, stderr_data = ffmpeg_process.communicate()
         
         if ffmpeg_process.returncode != 0:
