@@ -2,7 +2,7 @@ python-telegram-bot==20.*
 Pillow
 cairosvg
 lxml
-google-genai
+google-generativeai
 numpy
 google-cloud-texttospeech
 pydub
