@@ -129,22 +129,19 @@ def render_all(timeline, output_video):
         ffmpeg_process.stdin.close()
 
     except BrokenPipeError:
-        print("
-!!! BrokenPipeError: FFmpeg process terminated unexpectedly. !!!")
+        print("\n!!! BrokenPipeError: FFmpeg process terminated unexpectedly. !!!")
         print("This usually means ffmpeg encountered an error and closed the stream.")
         pass
     
     except Exception as e:
-        print(f"
-!!! An unexpected error occurred during frame writing: {e} !!!")
+        print(f"\n!!! An unexpected error occurred during frame writing: {e} !!!")
         raise
 
     finally:
         stdout_data, stderr_data = ffmpeg_process.communicate()
         
         if ffmpeg_process.returncode != 0:
-            print("
---- FFMPEG ERROR LOG (return code was not 0) ---")
+            print("\n--- FFMPEG ERROR LOG (return code was not 0) ---")
             if stderr_data:
                 print(stderr_data.decode('utf-8', errors='ignore'))
             else:
@@ -152,5 +149,4 @@ def render_all(timeline, output_video):
             print("--------------------------------------------------")
             raise RuntimeError(f"FFmpeg failed with exit code {ffmpeg_process.returncode}. See log above for details.")
         else:
-            print("
-FFmpeg process completed successfully.")
+            print("\nFFmpeg process completed successfully.")
