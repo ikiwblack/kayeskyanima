@@ -49,7 +49,8 @@ async def send_timeline_preview(chat_id, context):
     text = "📝 *Preview Timeline*\n\n"
     for i, s in enumerate(timeline["scenes"]):
         char_id = s['speaker']
-        char_details = next((c for c in timeline['characters'] if c['id'] == char_id), None)
+        # Pastikan 'characters' ada di timeline sebelum mencoba mengaksesnya
+        char_details = next((c for c in timeline.get('characters', []) if c['id'] == char_id), None)
         char_name = char_details['id'] if char_details else 'Unknown'
         text += f"{i+1}. ({char_name}) [{s.get('emotion','neutral')}] {s['text']} ({s.get('duration','auto')}s)\n"
 
@@ -141,7 +142,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    chat_id = query.message.chat.id
+    chat_id = query.message.chat_id
     data = query.data
     state = USER_STATE.get(chat_id)
 
@@ -158,11 +159,28 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("✅ Orientasi dipilih. Menganalisis naskah...")
 
             try:
+                # 1. Analyze script to get scenes
                 timeline = analyze(state["script"], state["orientation"])
+                
+                # 2. Load character data and inject it into the timeline
+                try:
+                    with open('characters.json', 'r', encoding='utf-8') as f:
+                        characters_data = json.load(f)
+                    if "characters" not in characters_data:
+                        raise ValueError("File characters.json tidak memiliki kunci 'characters'.")
+                    timeline['characters'] = characters_data['characters']
+                except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
+                    logger.error(f"Failed to load or process characters.json for chat {chat_id}: {e}")
+                    await query.edit_message_text(f"❌ Gagal memuat data karakter: {e}")
+                    USER_STATE.pop(chat_id, None)
+                    return
+
+                # 3. Save the complete timeline and proceed
                 state["timeline"] = timeline
                 state["step"] = "edit"
                 await query.delete_message()
                 await send_timeline_preview(chat_id, context)
+
             except Exception as e:
                 logger.error(f"Analysis failed for chat {chat_id}: {e}", exc_info=True)
                 await query.edit_message_text(f"❌ Analisis gagal: {e}\n\nPastikan naskah Anda menggunakan karakter yang valid (cek /characters) dan formatnya benar.")
