@@ -76,23 +76,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mengirim pesan selamat datang saat perintah /start dikeluarkan."""
     await update.message.reply_text(
         "👋 Halo! Saya adalah bot pembuat video Anima.\n\n"
-        "Kirimkan saya naskah Anda untuk memulai. Formatnya:\n"
-        "`NamaKarakter: (Emosi) Dialog Anda.`\n\n"
-        "*Contoh Penggunaan:*\n"
-        "`Kakek: Halo, Nek.`\n"
-        "`Nenek: (Senang) Halo juga, Kek! Tehnya sudah siap.`\n\n"
-        "Untuk daftar karakter, gunakan perintah /characters.\n"
-        "Untuk daftar dan cara penggunaan emosi, gunakan perintah /emotion.",
+        "Kirimkan saya naskah Anda untuk memulai. Gunakan format berikut dan pisahkan setiap adegan dengan **baris kosong**.\n\n"
+        "--- *Format Utama (dengan emosi)* ---\n"
+        "`[NamaKarakter: Emosi]`\n"
+        "`Dialog Anda di baris selanjutnya.`\n\n"
+        "--- *Format Sederhana (tanpa emosi)* ---\n"
+        "`NamaKarakter: Dialog Anda.`\n\n"
+        "--- *Contoh Penggunaan* ---\n"
+        "`[Nenek: Senang]`\n"
+        "`Halo, Kek! Tehnya sudah siap.`\n\n"
+        "`Kakek: Terima kasih, Nek.`\n\n"
+        "Untuk daftar karakter, gunakan /characters.\n"
+        "Untuk daftar emosi, gunakan /emotion.",
         parse_mode="Markdown"
     )
 
 async def emotion_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menampilkan daftar emosi yang tersedia dan cara menggunakannya."""
     emotion_text = ("🎭 *Cara Menggunakan Emosi*\n\n"
-                    "Anda dapat mengatur emosi karakter langsung di dalam naskah. "
-                    "Letakkan emosi dalam tanda kurung `()` setelah nama karakter.\n\n"
-                    "*Format:*\n`NamaKarakter: (Emosi) Dialog...`\n\n"
-                    "*Contoh:*\n`Nenek: (Senang) Halo, Kek!`\n\n"
+                    "Anda dapat mengatur emosi untuk setiap adegan dalam naskah. "
+                    "Gunakan format metadata di baris terpisah sebelum dialog.\n\n"
+                    "*Format:*\n"
+                    "`[NamaKarakter: Emosi]`\n"
+                    "`Dialog karakter di sini...`\n\n"
+                    "*Contoh:*\n"
+                    "`[Nenek: Senang]`\n"
+                    "`Halo, Kek! Tehnya sudah siap.`\n\n"
                     "--- *Daftar Emosi* ---\n"
                     "Berikut adalah emosi yang bisa Anda gunakan:")
 
