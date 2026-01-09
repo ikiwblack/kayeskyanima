@@ -21,3 +21,6 @@ pip install -r requirements.txt
 
 ## Run
 python main.py
+
+# FREE FOR YOU
+PROJECT CLOSED
