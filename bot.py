@@ -20,6 +20,7 @@ from telegram.ext import (
 
 # Import the analyze function directly
 from scripts.analyze_text import analyze
+from scripts.validate_timeline import validate_timeline
 
 # Enable logging
 logging.basicConfig(
@@ -138,6 +139,14 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 timeline = analyze(state["script"], state["orientation"])
                 
+                errors = validate_timeline(timeline)
+                if errors:
+                    error_details = "\n".join(errors)
+                    logger.error(f"Timeline validation failed for chat {chat_id}: {error_details}")
+                    await query.edit_message_text("❌ Maaf, AI gagal menganalisis naskah dengan benar. Strukturnya tidak valid. Silakan coba lagi dengan naskah yang berbeda atau ubah naskah Anda.")
+                    USER_STATE.pop(chat_id, None)
+                    return
+
                 if "characters" in timeline and timeline["characters"]:
                     state["timeline"] = timeline
                     state["char_count"] = len(timeline["characters"])

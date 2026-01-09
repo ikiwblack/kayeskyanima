@@ -1,4 +1,4 @@
-ALLOWED_EMOTIONS = {"neutral", "sad", "happy", "thinking", "angry"}
+ALLOWED_EMOTIONS = {"neutral", "sad", "happy", "thinking", "angry", "surprised"}
 
 def validate_timeline(timeline: dict):
     errors = []
