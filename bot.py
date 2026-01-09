@@ -20,7 +20,6 @@ from telegram.ext import (
 
 # Import the analyze function directly
 from scripts.analyze_text import analyze
-from scripts.validate_timeline import validate_timeline
 
 # Enable logging
 logging.basicConfig(
@@ -30,8 +29,12 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.environ["TELEGRAM_TOKEN"]
 
-# Daftar emosi yang di-hardcode untuk konsistensi
+# Daftar emosi internal yang digunakan oleh sistem.
 AVAILABLE_EMOTIONS = ["neutral", "sad", "happy", "thinking", "angry", "surprised"]
+
+# Daftar emosi dalam Bahasa Indonesia yang ditampilkan ke pengguna.
+USER_FACING_EMOTIONS = ["Marah", "Sedih", "Senang", "Berpikir", "Terkejut", "Netral"]
+
 
 # ===== STATE =====
 USER_STATE = {}
@@ -46,7 +49,6 @@ async def send_timeline_preview(chat_id, context):
     text = "📝 *Preview Timeline*\n\n"
     for i, s in enumerate(timeline["scenes"]):
         char_id = s['speaker']
-        # Ambil detail karakter langsung dari timeline
         char_details = next((c for c in timeline['characters'] if c['id'] == char_id), None)
         char_name = char_details['id'] if char_details else 'Unknown'
         text += f"{i+1}. ({char_name}) [{s.get('emotion','neutral')}] {s['text']} ({s.get('duration','auto')}s)\n"
@@ -74,20 +76,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Halo! Saya adalah bot pembuat video Anima.\n\n"
         "Kirimkan saya naskah Anda untuk memulai. Formatnya:\n"
-        "`NamaKarakter: Dialog baris pertama`\n"
-        "`NamaKarakterLain: Dialog baris kedua`\n\n"
-        "Contoh:\n"
+        "`NamaKarakter: (Emosi) Dialog Anda.`\n\n"
+        "*Contoh Penggunaan:*\n"
         "`Kakek: Halo, Nek.`\n"
-        "`Nenek: Halo juga, Kek.`\n\n"
-        "Untuk daftar karakter yang tersedia, gunakan perintah /characters.\n"
-        "Untuk daftar emosi yang bisa digunakan, gunakan perintah /emotion."
+        "`Nenek: (Senang) Halo juga, Kek! Tehnya sudah siap.`\n\n"
+        "Untuk daftar karakter, gunakan perintah /characters.\n"
+        "Untuk daftar dan cara penggunaan emosi, gunakan perintah /emotion.",
+        parse_mode="Markdown"
     )
 
 async def emotion_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menampilkan daftar emosi yang tersedia."""
-    emotion_text = "🎭 *Daftar Emosi Tersedia*\n\nAnda bisa menggunakan emosi berikut saat mengedit sebuah adegan:\n"
-    for emotion in AVAILABLE_EMOTIONS:
-        emotion_text += f"- `{emotion}`\n"
+    """Menampilkan daftar emosi yang tersedia dan cara menggunakannya."""
+    emotion_text = ("🎭 *Cara Menggunakan Emosi*\n\n"
+                    "Anda dapat mengatur emosi karakter langsung di dalam naskah. "
+                    "Letakkan emosi dalam tanda kurung `()` setelah nama karakter.\n\n"
+                    "*Format:*\n`NamaKarakter: (Emosi) Dialog...`\n\n"
+                    "*Contoh:*\n`Nenek: (Senang) Halo, Kek!`\n\n"
+                    "--- *Daftar Emosi* ---\n"
+                    "Berikut adalah emosi yang bisa Anda gunakan:")
+
+    for emotion in USER_FACING_EMOTIONS:
+        emotion_text += f"\n- {emotion}"
     
     await update.message.reply_text(emotion_text, parse_mode="Markdown")
     
@@ -171,7 +180,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text(f"Edit Scene {state['scene_idx']+1}:\n\"{scene['text']}\"", reply_markup=InlineKeyboardMarkup(keyboard))
             
             elif data == "edit:emotion":
-                keyboard = [[InlineKeyboardButton(e, callback_data=f"emotion:{e}")] for e in AVAILABLE_EMOTIONS]
+                # Saat mengedit, kita tetap gunakan kata kunci internal
+                keyboard = [[InlineKeyboardButton(e.capitalize(), callback_data=f"emotion:{e}")] for e in AVAILABLE_EMOTIONS]
                 keyboard.append([InlineKeyboardButton("⬅️ Kembali", callback_data="back")])
                 await query.edit_message_text("Pilih emotion:", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -182,7 +192,6 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await send_timeline_preview(chat_id, context)
 
             elif data == "edit:duration":
-                # Durasi sekarang tidak bisa diubah karena akan di-override oleh audio
                 await context.bot.answer_callback_query(query.id, "Durasi diatur secara otomatis oleh audio dan tidak bisa diubah manual.", show_alert=True)
 
             elif data == "back":
@@ -196,12 +205,10 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             elif data == "render":
                 await query.edit_message_text("⏳ *Rendering video...*\nIni mungkin memakan waktu beberapa menit.", parse_mode="Markdown")
                 
-                # Simpan timeline final ke file untuk di-debug jika perlu
                 with open("timeline.json", "w", encoding="utf-8") as f:
                     json.dump(state["timeline"], f, indent=2, ensure_ascii=False)
 
                 try:
-                    # Panggil main.py dengan argumen render
                     process = subprocess.run(
                         ["python", "main.py", "render"], 
                         check=True, capture_output=True, text=True, encoding='utf-8'
@@ -211,7 +218,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_video(chat_id=chat_id, video=open("output/video.mp4", "rb"), caption="Video Anda sudah jadi!")
                 except subprocess.CalledProcessError as e:
                     logger.error(f"Render failed for chat {chat_id}: STDERR: {e.stderr} STDOUT: {e.stdout}")
-                    await context.bot.send_message(chat_id, f"❌ Render gagal.\nLogs:\n{e.stderr[-1000:]}") # Kirim 1000 karakter terakhir dari error
+                    await context.bot.send_message(chat_id, f"❌ Render gagal.\nLogs:\n{e.stderr[-1000:]}")
                 finally:
                      USER_STATE.pop(chat_id, None)
     
@@ -221,7 +228,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=chat_id,
             text=f"❌ Terjadi kesalahan tak terduga. Proses telah dihentikan. Silakan coba lagi."
         )
-        USER_STATE.pop(chat_id, None) # Hapus state jika ada error
+        USER_STATE.pop(chat_id, None)
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
