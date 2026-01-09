@@ -18,6 +18,9 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 MODE = sys.argv[1] if len(sys.argv) > 1 else "render"
 
 # Load script and character definitions
+if not os.path.exists("script.txt"):
+    raise FileNotFoundError("File script.txt tidak ditemukan. Silakan buat file tersebut dan isi dengan naskah video.")
+
 with open("script.txt", encoding="utf-8") as f:
     text = f.read().strip()
 if not text:

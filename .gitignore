@@ -1,5 +1,21 @@
-.env
+# Python
 __pycache__/
-cache/
-output/
-*.log
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+
+# IDE specific
+.vscode/
+.idea/
+
+# Build & dependency artifacts
+build/
+dist/
+*.egg-info/
+
+# Temporary & Output files
+/output/
+timeline_error_dump.json

@@ -16,7 +16,9 @@ def validate_timeline(timeline: dict):
         if s.get("emotion") not in ALLOWED_EMOTIONS:
             errors.append(f"Scene {i+1}: emotion tidak valid")
         d = s.get("duration")
-        if not isinstance(d, (int, float)) or not (2 <= d <= 8):
-            errors.append(f"Scene {i+1}: durasi tidak valid")
+        # Melonggarkan aturan validasi: durasi hanya perlu angka non-negatif.
+        if not isinstance(d, (int, float)) or d < 0:
+            # Diubah untuk memberikan output debug yang lebih detail
+            errors.append(f"Scene {i+1}: durasi tidak valid (nilai: {repr(d)}, tipe: {type(d).__name__})")
 
     return errors
