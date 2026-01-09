@@ -39,6 +39,23 @@ else:
     # This assumes a default orientation if not run from bot, adjust if necessary
     timeline = analyze(text, '9:16')
 
+# --- SET RENDER RESOLUTION TO 720p (PORTRAIT OR LANDSCAPE) ---
+print("🔧 Mengatur resolusi render menjadi 720p.")
+original_width = timeline.get('width', 1080)
+original_height = timeline.get('height', 1920)
+
+if original_width > original_height:
+    # Landscape
+    print("   -> Terdeteksi orientasi lanskap. Mengatur ke 1280x720.")
+    timeline['width'] = 1280
+    timeline['height'] = 720
+else:
+    # Portrait or square
+    print("   -> Terdeteksi orientasi potret. Mengatur ke 720x1280.")
+    timeline['width'] = 720
+    timeline['height'] = 1280
+
+
 # Inject character details into the timeline structure for the renderer
 # The renderer now reads this directly from the timeline
 timeline["characters"] = characters_data["characters"] # Inject full character list
