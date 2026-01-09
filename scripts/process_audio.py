@@ -14,8 +14,11 @@ def get_audio_duration(file_path):
         with wave.open(file_path, 'rb') as wf:
             frames = wf.getnframes()
             rate = wf.getframerate()
+            # Hindari pembagian dengan nol jika rate adalah 0
+            if rate == 0:
+                return 0
             return frames / float(rate)
-    except wave.Error as e:
+    except (wave.Error, FileNotFoundError) as e:
         print(f"Could not read audio duration from {file_path}: {e}")
         return 0
 
@@ -24,7 +27,6 @@ def process_audio_and_update_timeline(timeline, character_map):
     updated_scenes = []
     scene_audio_files = []
 
-    # Langkah 1 & 2: Buat audio per adegan & dapatkan durasi akurat
     for i, scene in enumerate(timeline["scenes"]):
         speaker_id = scene.get("speaker")
         text = scene.get("text", "")
@@ -36,45 +38,57 @@ def process_audio_and_update_timeline(timeline, character_map):
             silence.export(scene_audio_path, format="wav")
             actual_duration = duration_sec
         else:
-            # Periksa apakah detail karakter ada (opsional, tapi bagus untuk validasi)
             if not character_map.get(speaker_id):
                 raise ValueError(f"Detail untuk karakter '{speaker_id}' tidak ditemukan.")
 
-            # Buat audio dengan gTTS
             tts = gTTS(text=text, lang='id', slow=False)
             temp_mp3_path = os.path.join(SCENES_DIR, f"scene_{i}_temp.mp3")
             tts.save(temp_mp3_path)
 
-            # Konversi MP3 ke WAV menggunakan pydub
-            audio = AudioSegment.from_mp3(temp_mp3_path)
-            audio.export(scene_audio_path, format="wav")
-            
-            # Hapus file MP3 sementara
-            os.remove(temp_mp3_path)
+            try:
+                # Muat MP3 ke pydub
+                audio = AudioSegment.from_mp3(temp_mp3_path)
+                
+                # *** PERBAIKAN UTAMA: Dapatkan durasi dari objek pydub di memori ***
+                # Ini menghindari ketergantungan pada file WAV yang mungkin gagal dibuat
+                actual_duration = len(audio) / 1000.0
 
-            # Dapatkan durasi akurat dari file WAV yang baru dibuat
-            actual_duration = get_audio_duration(scene_audio_path)
+                # Lanjutkan untuk mengekspor ke WAV
+                audio.export(scene_audio_path, format="wav")
+
+            except Exception as e:
+                print(f"Error converting MP3 to WAV or getting duration for scene {i}: {e}")
+                # Jika konversi gagal, kita setidaknya punya durasi 0 untuk validasi
+                actual_duration = 0
+                # Buat file WAV kosong agar proses selanjutnya tidak error karena file tidak ada
+                AudioSegment.silent(duration=10).export(scene_audio_path, format="wav")
+
+
+            finally:
+                # Hapus file MP3 sementara
+                if os.path.exists(temp_mp3_path):
+                    os.remove(temp_mp3_path)
+        
+        # Jika durasi masih 0 setelah semua upaya, itu adalah masalah.
+        if actual_duration <= 0:
+            print(f"PERINGATAN: Durasi untuk adegan {i} ('{text[:20]}...') adalah nol atau negatif.")
 
         scene_audio_files.append(scene_audio_path)
         
-        # Langkah 3: Perbarui durasi adegan dengan durasi audio yang sebenarnya
         scene["duration"] = round(actual_duration, 2)
         updated_scenes.append(scene)
 
     timeline["scenes"] = updated_scenes
 
-    # Langkah 4: Gabungkan semua file audio menjadi satu file audio utama
     concat_list_path = os.path.join(OUTPUT_DIR, "concat_list.txt")
     with open(concat_list_path, "w") as f:
         for file_path in scene_audio_files:
-            # Path harus relatif terhadap direktori kerja ffmpeg (OUTPUT_DIR)
             relative_path = os.path.relpath(file_path, OUTPUT_DIR)
             f.write(f"file '{relative_path}'\n")
 
     output_audio_path = os.path.join(OUTPUT_DIR, "audio.wav")
     
     try:
-        # Menjalankan ffmpeg dari direktori OUTPUT untuk menyederhanakan path
         subprocess.run([
             "ffmpeg", "-y",
             "-f", "concat",
