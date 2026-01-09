@@ -55,15 +55,8 @@ else:
     timeline['width'] = 720
     timeline['height'] = 1280
 
-
 # Inject character details into the timeline structure for the renderer
-# The renderer now reads this directly from the timeline
 timeline["characters"] = characters_data["characters"] # Inject full character list
-
-# Validate the basic structure
-errors = validate_timeline(timeline)
-if errors:
-    raise ValueError("\n".join(errors))
 
 # If we are in 'analyze' mode (called by the bot), we stop here.
 if MODE == "analyze":
@@ -75,16 +68,28 @@ if MODE == "analyze":
 # --- RENDER MODE --- (Called after user clicks 'Render' in the bot)
 
 print("📢 Menghasilkan audio dan menyinkronkan durasi timeline...")
-updated_timeline = process_audio_and_update_timeline(timeline, characters_map)
+timeline = process_audio_and_update_timeline(timeline, characters_map)
+
+print("✅ Audio dan durasi berhasil disinkronkan.")
+
+# Validate the timeline AFTER audio processing to ensure durations are set
+print("🔍 Memvalidasi timeline akhir...")
+errors = validate_timeline(timeline)
+if errors:
+    # Jika ada error, cetak timeline untuk debugging
+    with open("timeline_error_dump.json", "w", encoding="utf-8") as f:
+        json.dump(timeline, f, indent=2, ensure_ascii=False)
+    print("❌ Timeline tidak valid. Lihat 'timeline_error_dump.json' untuk detailnya.")
+    raise ValueError("\n".join(errors))
 
 print("🖼️ Merender frame video...")
 render_all(
-    timeline=updated_timeline,
+    timeline=timeline,
     output_video="output/video_noaudio.mp4"
 )
 
 print("✍️ Membuat subtitle...")
-build_ass(updated_timeline, "output/subtitles.ass")
+build_ass(timeline, "output/subtitles.ass")
 
 print("🎬 Menggabungkan semua file...")
 subprocess.run([
